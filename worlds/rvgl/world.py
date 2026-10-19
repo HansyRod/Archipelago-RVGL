@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from worlds.AutoWorld import World
 
-from . import items, locations, regions, rules
+from . import items, locations, output, regions, rules
 from .cars import STOCK_CARS
 from .cups import STOCK_CUPS
 from .options import RVGLOptions
@@ -80,6 +80,9 @@ class RVGLWorld(World):
 
     def get_filler_item_name(self) -> str:
         return items.FILLER_ITEM.name
+
+    def generate_output(self, output_directory: str) -> None:
+        output.generate_output(self, output_directory)
 
     def fill_slot_data(self) -> dict[str, str]:
         return {"goalEventKey": locations.get_championship_event_key(self.goal_cup)}

@@ -39,6 +39,17 @@ def get_track_item_name(track:TrackData) -> str:
 def get_cup_item_name(cup:CupData) -> str:
     return cup.display_name
 
+
+def get_archipelago_item_name(source: SourceData | None) -> str:
+    if isinstance(source, CarData):
+        return f"car:{source.folder}"
+    if isinstance(source, TrackData):
+        return f"track:{source.folder}"
+    if isinstance(source, CupData):
+        return f"cup:{source.difficulty}"
+    return ""
+
+
 def get_car_item_data(cars: tuple[CarData, ...], set_offset: int) -> tuple[ItemData, ...]:
     return tuple(
         ItemData(
