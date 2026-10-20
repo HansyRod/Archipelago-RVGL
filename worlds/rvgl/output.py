@@ -7,7 +7,8 @@ from typing import TYPE_CHECKING, Any
 
 from .cars import DC_CARS, STOCK_CARS, CarData
 from .cups import STOCK_CUPS, CupData
-from .items import SourceData, get_archipelago_item_name, get_car_item_name, get_cup_item_name, get_track_item_name
+from .items import ITEM_DATA, SourceData, get_archipelago_item_name, get_car_item_name, get_cup_item_name, get_track_item_name
+from .locations import EVENT_KEY_TO_LOCATION_ID, get_championship_event_key
 from .tracks import DC_TRACKS, STOCK_TRACKS, TrackData
 
 if TYPE_CHECKING:
@@ -15,6 +16,7 @@ if TYPE_CHECKING:
 
 
 RANDOMIZER_CONFIG_VERSION = "0.2.0"
+ARCHIPELAGO_SCHEMA_VERSION = 1
 
 # The DLL uses positional track slots, including Rooftops at index 4.
 TRACK_SLOTS = (*STOCK_TRACKS[:4], *DC_TRACKS, *STOCK_TRACKS[4:])
@@ -112,8 +114,19 @@ def _build_cup_config(cup: CupData, starting_names: set[str]) -> dict[str, Any]:
     }
 
 
+def _build_archipelago_config(world: RVGLWorld) -> dict[str, Any]:
+    return {
+        "schemaVersion": ARCHIPELAGO_SCHEMA_VERSION,
+        "slotNumber": world.player,
+        "slotName": world.player_name,
+        "locations": dict(EVENT_KEY_TO_LOCATION_ID),
+        "items": {get_archipelago_item_name(item.source): item.id for item in ITEM_DATA},
+        "goalEventKey": get_championship_event_key(world.goal_cup),
+    }
+
+
 def build_randomizer_config(world: RVGLWorld) -> dict[str, Any]:
-    """Build the existing DLL config schema without changing the generated content or AP state."""
+    """Build the DLL config and AP mappings without changing the generated content or AP state."""
     starting_names = {item.name for item in world.multiworld.precollected_items[world.player]}
     profile_identity = f"{world.multiworld.seed_name}:{world.player}"
     profile_name = "ap_" + hashlib.sha256(profile_identity.encode("utf-8")).hexdigest()[:12]
@@ -139,6 +152,7 @@ def build_randomizer_config(world: RVGLWorld) -> dict[str, Any]:
         "extraCars": [],
         "tracks": [_build_track_config(track, starting_names) for track in TRACK_SLOTS],
         "cups": [_build_cup_config(cup, starting_names) for cup in STOCK_CUPS],
+        "archipelago": _build_archipelago_config(world),
     }
 
 

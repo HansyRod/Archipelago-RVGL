@@ -8,7 +8,8 @@ from test.general import setup_multiworld
 from .. import RVGLWorld
 from ..cars import DC_CARS, STOCK_CARS
 from ..cups import STOCK_CUPS
-from ..items import get_car_item_name, get_cup_item_name, get_track_item_name
+from ..items import FILLER_ITEM, get_car_item_name, get_cup_item_name, get_track_item_name
+from ..locations import LOCATION_DATA
 from ..output import build_randomizer_config
 from ..tracks import DC_TRACKS, STOCK_TRACKS
 
@@ -19,7 +20,7 @@ class TestOutput(unittest.TestCase):
         config = build_randomizer_config(multiworld.worlds[1])
         starting_names = {item.name for item in multiworld.precollected_items[1]}
         self.assertEqual(set(config), {
-            "metadata", "global_options", "stockCars", "dcCars", "extraCars", "tracks", "cups",
+            "metadata", "global_options", "stockCars", "dcCars", "extraCars", "tracks", "cups", "archipelago",
         })
         self.assertEqual(config["metadata"]["seed"], multiworld.seed_name)
         self.assertEqual(config["metadata"]["version"], "0.2.0")
@@ -88,6 +89,45 @@ class TestOutput(unittest.TestCase):
         self.assertEqual(config["cups"][3]["stages"][2], {
             "trackFolder": "toylite", "numLaps": 10, "isReverse": True, "isMirror": True,
         })
+
+    def test_archipelago_metadata_matches_registered_ids_and_unlock_conditions(self) -> None:
+        multiworld = setup_multiworld([RVGLWorld, RVGLWorld], seed=0)
+        multiworld.player_name[2] = "Player Two \u00c9"
+        for player, world in multiworld.worlds.items():
+            with self.subTest(player=player):
+                config = build_randomizer_config(world)
+                archipelago = config["archipelago"]
+                self.assertEqual(set(archipelago), {
+                    "schemaVersion", "slotNumber", "slotName", "locations", "items", "goalEventKey",
+                })
+                self.assertEqual(archipelago["schemaVersion"], 1)
+                self.assertEqual(archipelago["slotNumber"], player)
+                self.assertEqual(archipelago["slotName"], world.player_name)
+                self.assertEqual(archipelago["goalEventKey"], "championship_win:4")
+                self.assertIn(archipelago["goalEventKey"], archipelago["locations"])
+                self.assertEqual(archipelago["items"][""], FILLER_ITEM.id)
+
+                for mapping, registered_ids in (
+                    (archipelago["items"], world.item_name_to_id),
+                    (archipelago["locations"], world.location_name_to_id),
+                ):
+                    self.assertEqual(len(mapping), len(registered_ids))
+                    self.assertEqual(set(mapping.values()), set(registered_ids.values()))
+                    self.assertTrue(all(isinstance(key, str) for key in mapping))
+                    self.assertTrue(all(type(value) is int for value in mapping.values()))
+                for location in LOCATION_DATA:
+                    self.assertEqual(archipelago["locations"][location.event_key], location.id)
+
+                for entry in config["stockCars"] + config["dcCars"] + config["tracks"] + config["cups"]:
+                    if "customUnlock" in entry:
+                        self.assertIn(entry["customUnlock"]["archipelagoItem"], archipelago["items"])
+
+                # Precollected unlocks must remain in the ID map for initial server delivery.
+                starting_ids = {item.code for item in multiworld.precollected_items[player]}
+                self.assertTrue(starting_ids.issubset(archipelago["items"].values()))
+                self.assertNotIn("Victory", archipelago["items"])
+                self.assertNotIn("Victory", archipelago["locations"])
+                self.assertEqual(json.loads(json.dumps(archipelago)), archipelago)
 
     def test_output_is_reproducible_and_scoped_to_each_player(self) -> None:
         multiworld = setup_multiworld([RVGLWorld, RVGLWorld], seed=0)
