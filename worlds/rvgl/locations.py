@@ -95,18 +95,21 @@ def get_track_location_data(track_items: tuple[ItemData, ...]) -> tuple[Location
                 track,
             ),
             LocationData(
-                item.id + REVERSE_TIME_TRIAL_ID_OFFSET,
-                get_reverse_time_trial_location_name(track),
-                get_reverse_time_trial_event_key(track),
-                track,
-            ),
-            LocationData(
                 item.id + MIRROR_TIME_TRIAL_ID_OFFSET,
                 get_mirror_time_trial_location_name(track),
                 get_mirror_time_trial_event_key(track),
                 track,
             ),
         ))
+
+        # Reverse checks are only reachable when the track provides reverse data.
+        if track.has_reverse:
+            locations.append(LocationData(
+                item.id + REVERSE_TIME_TRIAL_ID_OFFSET,
+                get_reverse_time_trial_location_name(track),
+                get_reverse_time_trial_event_key(track),
+                track,
+            ))
 
     return tuple(locations)
 
