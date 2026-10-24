@@ -32,7 +32,7 @@ class RVGLWorld(World):
     goal_cup = next(cup for cup in STOCK_CUPS if cup.folder == "platinum")
 
     def generate_early(self) -> None:
-        """Grant the initial cars, track, and cup using this world's seeded random generator."""
+        """Grant the initial cars, tracks, and cup using this world's seeded random generator."""
         rookie_cars = tuple(car for car in STOCK_CARS if car.rating == 0)
         easy_tracks = tuple(track for track in (*STOCK_TRACKS, *DC_TRACKS) if track.difficulty == 1)
         bronze_cup = next(cup for cup in STOCK_CUPS if cup.folder == "bronze")
@@ -40,7 +40,8 @@ class RVGLWorld(World):
         starting_item_names = [
             *(items.get_car_item_name(car)
               for car in self.random.sample(rookie_cars, self.options.starting_cars.value)),
-            items.get_track_item_name(self.random.choice(easy_tracks)),
+            *(items.get_track_item_name(track)
+              for track in self.random.sample(easy_tracks, self.options.starting_tracks.value)),
             items.get_cup_item_name(bronze_cup),
         ]
 
