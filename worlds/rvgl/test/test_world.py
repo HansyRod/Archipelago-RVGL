@@ -2,14 +2,18 @@ import unittest
 from collections import Counter
 
 from BaseClasses import CollectionState
+from Fill import distribute_items_restrictive
 from test import bases
 from test.general import setup_multiworld
+from worlds.AutoWorld import call_all
 
 from .. import RVGLWorld
 from ..cars import STOCK_CARS, CarData
 from ..cups import STOCK_CUPS, CupData
 from ..items import FILLER_ITEM, ITEM_DATA, get_cup_item_name, get_track_item_name
+from ..locations import EVENT_KEY_TO_LOCATION_ID, LOCATION_DATA, STUNT_ARENA_LOCATIONS
 from ..regions import get_cup_region_name, get_track_region_name
+from ..stunt_arena import STOCK_STUNT_ARENA_STAR_COUNT
 from ..tracks import DC_TRACKS, STOCK_TRACKS, TrackData
 
 
@@ -98,6 +102,67 @@ class TestStartingTracks(unittest.TestCase):
                 self.assertEqual(len(multiworld.itempool), len(multiworld.get_unfilled_locations(1)))
                 for item_name in easy_names - starting_tracks:
                     self.assertEqual(pool_counts[item_name], 1)
+
+
+class TestStuntArena(unittest.TestCase):
+    def test_stunt_star_catalogue_matches_dll_events(self) -> None:
+        self.assertEqual(len(STUNT_ARENA_LOCATIONS), STOCK_STUNT_ARENA_STAR_COUNT)
+        self.assertEqual(
+            [location.id for location in STUNT_ARENA_LOCATIONS],
+            list(range(4000001, 4000001 + STOCK_STUNT_ARENA_STAR_COUNT)),
+        )
+        self.assertEqual(
+            [location.name for location in STUNT_ARENA_LOCATIONS],
+            [f"Find Stunt Arena Star: {number}" for number in range(1, STOCK_STUNT_ARENA_STAR_COUNT + 1)],
+        )
+        self.assertEqual(
+            [location.event_key for location in STUNT_ARENA_LOCATIONS],
+            [f"stunt_star:{number}" for number in range(1, STOCK_STUNT_ARENA_STAR_COUNT + 1)],
+        )
+        self.assertEqual(len(LOCATION_DATA), len({location.id for location in LOCATION_DATA}))
+        self.assertEqual(len(LOCATION_DATA), len(RVGLWorld.location_name_to_id))
+        self.assertEqual(len(LOCATION_DATA), len(EVENT_KEY_TO_LOCATION_ID))
+
+    def test_mixed_stunt_star_options_generate_independently(self) -> None:
+        catalogue = dict(RVGLWorld.location_name_to_id)
+        data_package = RVGLWorld.get_data_package_data()
+        stunt_ids = {location.id for location in STUNT_ARENA_LOCATIONS}
+        for enabled_player in (1, 2):
+            with self.subTest(enabled_player=enabled_player):
+                multiworld = setup_multiworld(
+                    [RVGLWorld, RVGLWorld], seed=0,
+                    options=[{"include_stunt_arena_stars": player == enabled_player} for player in (1, 2)],
+                )
+                filler_counts = {}
+                for player, world in multiworld.worlds.items():
+                    active_ids = {
+                        location.address for location in world.get_locations() if location.address is not None
+                    }
+                    expected_ids = set(catalogue.values())
+                    if player != enabled_player:
+                        expected_ids -= stunt_ids
+                    self.assertEqual(active_ids, expected_ids)
+                    self.assertEqual(world.location_name_to_id, catalogue)
+
+                    pool = [item for item in multiworld.itempool if item.player == player]
+                    self.assertEqual(len(pool), len(multiworld.get_unfilled_locations(player)))
+                    filler_counts[player] = sum(item.name == FILLER_ITEM.name for item in pool)
+                    if player == enabled_player:
+                        state = CollectionState(multiworld)
+                        for location in STUNT_ARENA_LOCATIONS:
+                            self.assertTrue(world.get_location(location.name).can_reach(state))
+
+                self.assertEqual(
+                    filler_counts[enabled_player] - filler_counts[3 - enabled_player], STOCK_STUNT_ARENA_STAR_COUNT,
+                )
+                distribute_items_restrictive(multiworld)
+                call_all(multiworld, "post_fill")
+                call_all(multiworld, "finalize_multiworld")
+                self.assertFalse(multiworld.get_unfilled_locations())
+                self.assertTrue(multiworld.can_beat_game())
+                self.assertTrue(multiworld.fulfills_accessibility())
+                self.assertEqual(RVGLWorld.location_name_to_id, catalogue)
+                self.assertEqual(RVGLWorld.get_data_package_data(), data_package)
 
 
 class TestRegionAccess(unittest.TestCase):

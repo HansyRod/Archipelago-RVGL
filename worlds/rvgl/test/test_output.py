@@ -8,9 +8,10 @@ from test.general import setup_multiworld
 from .. import RVGLWorld
 from ..cars import DC_CARS, STOCK_CARS
 from ..cups import STOCK_CUPS
-from ..items import FILLER_ITEM, get_car_item_name, get_cup_item_name, get_track_item_name
-from ..locations import LOCATION_DATA
+from ..items import FILLER_ITEM, STUNT_ARENA_ID_OFFSET, get_car_item_name, get_cup_item_name, get_track_item_name
+from ..locations import LOCATION_DATA, STUNT_ARENA_LOCATIONS
 from ..output import build_randomizer_config
+from ..stunt_arena import STOCK_STUNT_ARENA_STAR_COUNT
 from ..tracks import DC_TRACKS, STOCK_TRACKS
 
 
@@ -86,7 +87,10 @@ class TestOutput(unittest.TestCase):
         })
 
     def test_archipelago_metadata_matches_registered_ids_and_unlock_conditions(self) -> None:
-        multiworld = setup_multiworld([RVGLWorld, RVGLWorld], seed=0)
+        multiworld = setup_multiworld(
+            [RVGLWorld, RVGLWorld], seed=0,
+            options=[{"include_stunt_arena_stars": True}, {"include_stunt_arena_stars": False}],
+        )
         multiworld.player_name[2] = "Player Two \u00c9"
         for player, world in multiworld.worlds.items():
             with self.subTest(player=player):
@@ -102,16 +106,37 @@ class TestOutput(unittest.TestCase):
                 self.assertIn(archipelago["goalEventKey"], archipelago["locations"])
                 self.assertEqual(archipelago["items"][""], FILLER_ITEM.id)
 
+                stunt_locations = {
+                    event_key: location_id
+                    for event_key, location_id in archipelago["locations"].items()
+                    if event_key.startswith("stunt_star:")
+                }
+                if world.options.include_stunt_arena_stars:
+                    self.assertEqual(stunt_locations, {
+                        f"stunt_star:{number}": STUNT_ARENA_ID_OFFSET + number
+                        for number in range(1, STOCK_STUNT_ARENA_STAR_COUNT + 1)
+                    })
+                else:
+                    self.assertEqual(stunt_locations, {})
+
+                active_locations = {
+                    location.name: location.id
+                    for location in LOCATION_DATA
+                    if location not in STUNT_ARENA_LOCATIONS or world.options.include_stunt_arena_stars
+                }
                 for mapping, registered_ids in (
                     (archipelago["items"], world.item_name_to_id),
-                    (archipelago["locations"], world.location_name_to_id),
+                    (archipelago["locations"], active_locations),
                 ):
                     self.assertEqual(len(mapping), len(registered_ids))
                     self.assertEqual(set(mapping.values()), set(registered_ids.values()))
                     self.assertTrue(all(isinstance(key, str) for key in mapping))
                     self.assertTrue(all(type(value) is int for value in mapping.values()))
                 for location in LOCATION_DATA:
-                    self.assertEqual(archipelago["locations"][location.event_key], location.id)
+                    if location.name in active_locations:
+                        self.assertEqual(archipelago["locations"][location.event_key], location.id)
+                    else:
+                        self.assertNotIn(location.event_key, archipelago["locations"])
 
                 for entry in config["stockCars"] + config["dcCars"] + config["tracks"] + config["cups"]:
                     if "customUnlock" in entry:

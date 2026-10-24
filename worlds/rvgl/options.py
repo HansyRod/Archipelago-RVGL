@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from Options import OptionGroup, PerGameCommonOptions, Range
+from Options import OptionGroup, PerGameCommonOptions, Range, Toggle
 
 
 class StartingCars(Range):
@@ -25,13 +25,20 @@ class StartingTracks(Range):
     default = 1
 
 
+class IncludeStuntArenaStars(Toggle):
+    """Include the Stunt Arena's 20 stars as location checks."""
+    display_name = "Include Stunt Arena Stars"
+
+
 @dataclass
 class RVGLOptions(PerGameCommonOptions):
     """RVGL-specific options and Archipelago's common settings."""
     starting_cars: StartingCars
     starting_tracks: StartingTracks
+    include_stunt_arena_stars: IncludeStuntArenaStars
 
 
 option_groups = [
     OptionGroup("Starting Content Options", [StartingCars, StartingTracks]),
+    OptionGroup("Location Pool Options", [IncludeStuntArenaStars]),
 ]

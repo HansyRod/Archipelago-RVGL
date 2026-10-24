@@ -112,11 +112,19 @@ def _build_cup_config(cup: CupData) -> dict[str, Any]:
 
 
 def _build_archipelago_config(world: RVGLWorld) -> dict[str, Any]:
+    # regions.py already determines which locations exist for this player.
+    # Export only their event-key mappings to the DLL's JSON, skipping internal
+    # events such as Victory, whose address is None because they have no network ID.
+    active_location_ids = {location.address for location in world.get_locations() if location.address is not None}
     return {
         "schemaVersion": ARCHIPELAGO_SCHEMA_VERSION,
         "slotNumber": world.player,
         "slotName": world.player_name,
-        "locations": dict(EVENT_KEY_TO_LOCATION_ID),
+        "locations": {
+            event_key: location_id
+            for event_key, location_id in EVENT_KEY_TO_LOCATION_ID.items()
+            if location_id in active_location_ids
+        },
         "items": {get_archipelago_item_name(item.source): item.id for item in ITEM_DATA},
         "goalEventKey": get_championship_event_key(world.goal_cup),
     }

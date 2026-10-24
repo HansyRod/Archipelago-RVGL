@@ -5,9 +5,9 @@ from dataclasses import dataclass
 from BaseClasses import Location
 
 from .cups import CupData
-from .items import DC_TRACK_ITEMS, STOCK_CUP_ITEMS, STOCK_TRACK_ITEMS, ItemData
+from .items import DC_TRACK_ITEMS, STOCK_CUP_ITEMS, STOCK_TRACK_ITEMS, STUNT_ARENA_ID_OFFSET, ItemData
+from .stunt_arena import STOCK_STUNT_ARENA, StuntArenaData
 from .tracks import TrackData
-
 
 # Location IDs use the owning item's ID plus a check-specific offset.
 SINGLE_RACE_ID_OFFSET = 1
@@ -23,7 +23,7 @@ class LocationData:
     id: int
     name: str
     event_key: str
-    source: TrackData | CupData
+    source: TrackData | CupData | StuntArenaData
 
 
 def get_single_race_location_name(track: TrackData) -> str:
@@ -35,16 +35,18 @@ def get_practice_star_location_name(track: TrackData) -> str:
 def get_time_trial_location_name(track: TrackData) -> str:
     return f"Beat Normal Time Trial: {track.display_name}"
 
-
 def get_reverse_time_trial_location_name(track: TrackData) -> str:
     return f"Beat Reverse Time Trial: {track.display_name}"
-
 
 def get_mirror_time_trial_location_name(track: TrackData) -> str:
     return f"Beat Mirror Time Trial: {track.display_name}"
 
 def get_championship_location_name(cup: CupData) -> str:
     return f"Win {cup.display_name}"
+
+def get_stunt_arena_star_location_name(arena: StuntArenaData, star_number: int) -> str:
+    return f"Find {arena.display_name} Star: {star_number}"
+
 
 def get_single_race_event_key(track: TrackData) -> str:
     return f"single_race_win:{track.folder}"
@@ -55,16 +57,17 @@ def get_practice_star_event_key(track: TrackData) -> str:
 def get_time_trial_event_key(track: TrackData) -> str:
     return f"time_trial_normal:{track.folder}"
 
-
 def get_reverse_time_trial_event_key(track: TrackData) -> str:
     return f"time_trial_reverse:{track.folder}"
-
 
 def get_mirror_time_trial_event_key(track: TrackData) -> str:
     return f"time_trial_mirror:{track.folder}"
 
 def get_championship_event_key(cup: CupData) -> str:
     return f"championship_win:{cup.difficulty}"
+
+def get_stunt_arena_star_event_key(star_number: int) -> str:
+    return f"stunt_star:{star_number}"
 
 
 def get_track_location_data(track_items: tuple[ItemData, ...]) -> tuple[LocationData, ...]:
@@ -133,14 +136,29 @@ def get_cup_location_data(cup_items: tuple[ItemData, ...]) -> tuple[LocationData
     return tuple(locations)
 
 
+def get_stunt_arena_location_data(arena: StuntArenaData) -> tuple[LocationData, ...]:
+    return tuple(
+        LocationData(
+            STUNT_ARENA_ID_OFFSET + star_number,
+            get_stunt_arena_star_location_name(arena, star_number),
+            get_stunt_arena_star_event_key(star_number),
+            arena,
+        )
+        for star_number in range(1, arena.star_count + 1)
+    )
+
+
 STOCK_TRACK_LOCATIONS = get_track_location_data(STOCK_TRACK_ITEMS)
 DC_TRACK_LOCATIONS = get_track_location_data(DC_TRACK_ITEMS)
 STOCK_CUP_LOCATIONS = get_cup_location_data(STOCK_CUP_ITEMS)
+STUNT_ARENA_LOCATIONS = get_stunt_arena_location_data(STOCK_STUNT_ARENA)
 
+# Register every supported check here; player options only affect instantiated locations.
 LOCATION_DATA: tuple[LocationData, ...] = (
     *STOCK_TRACK_LOCATIONS,
     *DC_TRACK_LOCATIONS,
     *STOCK_CUP_LOCATIONS,
+    *STUNT_ARENA_LOCATIONS,
 )
 
 LOCATION_NAME_TO_ID = {
