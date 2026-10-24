@@ -14,12 +14,24 @@ class StartingCars(Range):
     default = 3
 
 
+class StartingTracks(Range):
+    """Number of Easy tracks accessible from the start.
+
+    To have specific starting tracks, use the start_inventory option and set this to 0.
+    """
+    display_name = "Starting Tracks"
+    range_start = 0
+    range_end = 4
+    default = 1
+
+
 @dataclass
 class RVGLOptions(PerGameCommonOptions):
     """RVGL-specific options and Archipelago's common settings."""
     starting_cars: StartingCars
+    starting_tracks: StartingTracks
 
 
 option_groups = [
-    OptionGroup("Starting Content Options", [StartingCars]),
+    OptionGroup("Starting Content Options", [StartingCars, StartingTracks]),
 ]

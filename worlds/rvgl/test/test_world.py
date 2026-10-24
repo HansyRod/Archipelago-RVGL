@@ -75,6 +75,31 @@ class TestStartingCars(unittest.TestCase):
                 self.assertTrue((rookie_names - starting_cars).issubset(pool_names))
 
 
+class TestStartingTracks(unittest.TestCase):
+    def test_starting_track_counts_and_item_pool(self) -> None:
+        easy_names = {
+            get_track_item_name(track) for track in (*STOCK_TRACKS, *DC_TRACKS) if track.difficulty == 1
+        }
+        for count in range(5):
+            with self.subTest(starting_tracks=count):
+                multiworld = setup_multiworld(RVGLWorld, seed=0, options={"starting_tracks": count})
+                starting_items = multiworld.precollected_items[1]
+                starting_names = {item.name for item in starting_items}
+                starting_tracks = {name for name in starting_names if name.startswith("Track: ")}
+                pool_counts = Counter(item.name for item in multiworld.itempool)
+
+                self.assertEqual(len(starting_tracks), count)
+                self.assertTrue(starting_tracks.issubset(easy_names))
+                self.assertEqual(len(starting_items), count + 4)
+                self.assertEqual(len(starting_names), count + 4)
+                self.assertIn("Bronze Cup", starting_names)
+                self.assertEqual(sum(name.startswith("Car: ") for name in starting_names), 3)
+                self.assertFalse(starting_names.intersection(pool_counts))
+                self.assertEqual(len(multiworld.itempool), len(multiworld.get_unfilled_locations(1)))
+                for item_name in easy_names - starting_tracks:
+                    self.assertEqual(pool_counts[item_name], 1)
+
+
 class TestRegionAccess(unittest.TestCase):
     def test_regions_require_their_own_players_item(self) -> None:
         # Omit starting inventory so every region's requirement can be tested independently.
