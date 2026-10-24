@@ -2,12 +2,11 @@ from __future__ import annotations
 
 from worlds.AutoWorld import World
 
-from . import items, locations, output, regions, rules
+from . import items, locations, output, regions, rules, web_world
 from .cars import STOCK_CARS
 from .cups import STOCK_CUPS
 from .options import RVGLOptions
 from .tracks import DC_TRACKS, STOCK_TRACKS
-
 
 _ITEM_DATA_BY_NAME = {
     item.name: item
@@ -21,6 +20,8 @@ class RVGLWorld(World):
     Control and race toy RC cars in everyday scenarios like a neighbourhood, supermarkets and gardens!
     """
     game = "RVGL"
+
+    web = web_world.RVGLWebWorld()
 
     options_dataclass = RVGLOptions
     options: RVGLOptions
@@ -37,7 +38,8 @@ class RVGLWorld(World):
         bronze_cup = next(cup for cup in STOCK_CUPS if cup.folder == "bronze")
 
         starting_item_names = [
-            *(items.get_car_item_name(car) for car in self.random.sample(rookie_cars, 3)),
+            *(items.get_car_item_name(car)
+              for car in self.random.sample(rookie_cars, self.options.starting_cars.value)),
             items.get_track_item_name(self.random.choice(easy_tracks)),
             items.get_cup_item_name(bronze_cup),
         ]

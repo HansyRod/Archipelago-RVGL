@@ -53,6 +53,28 @@ class TestRVGL(bases.WorldTestBase):
                 self.assertEqual(pool_counts[item_name], 1)
 
 
+class TestStartingCars(unittest.TestCase):
+    def test_starting_car_counts_and_item_pool(self) -> None:
+        rookie_names = {f"Car: {car.display_name}" for car in STOCK_CARS if car.rating == 0}
+        for count in range(9):
+            with self.subTest(starting_cars=count):
+                multiworld = setup_multiworld(RVGLWorld, seed=0, options={"starting_cars": count})
+                starting_items = multiworld.precollected_items[1]
+                starting_names = {item.name for item in starting_items}
+                starting_cars = {name for name in starting_names if name.startswith("Car: ")}
+                pool_names = [item.name for item in multiworld.itempool]
+
+                self.assertEqual(len(starting_cars), count)
+                self.assertTrue(starting_cars.issubset(rookie_names))
+                self.assertEqual(len(starting_items), count + 2)
+                self.assertEqual(len(starting_names), count + 2)
+                self.assertIn("Bronze Cup", starting_names)
+                self.assertEqual(sum(name.startswith("Track: ") for name in starting_names), 1)
+                self.assertFalse(starting_names.intersection(pool_names))
+                self.assertEqual(len(pool_names), len(multiworld.get_unfilled_locations(1)))
+                self.assertTrue((rookie_names - starting_cars).issubset(pool_names))
+
+
 class TestRegionAccess(unittest.TestCase):
     def test_regions_require_their_own_players_item(self) -> None:
         # Omit starting inventory so every region's requirement can be tested independently.
