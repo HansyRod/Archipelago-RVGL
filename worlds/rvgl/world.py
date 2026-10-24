@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from Options import OptionError
 from worlds.AutoWorld import World
 
 from . import items, locations, output, regions, rules, web_world
@@ -65,9 +66,12 @@ class RVGLWorld(World):
 
         location_count = len(self.multiworld.get_unfilled_locations(self.player))
         if len(itempool) > location_count:
-            raise ValueError(
-                f"RVGL player {self.player} has {len(itempool)} unlock items "
-                f"but only {location_count} reward locations."
+            raise OptionError(
+                f"RVGL player {self.player} ({self.player_name}) has {len(itempool)} unlock items "
+                f"but only {location_count} enabled locations "
+                f"({len(itempool) - location_count} more locations needed). "
+                "Enable more Location Pool Options to increase the number of locations, "
+                "or increase the starting inventory to decrease the number of required items."
             )
 
         itempool.extend(self.create_filler() for _ in range(location_count - len(itempool)))

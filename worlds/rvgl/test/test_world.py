@@ -1,8 +1,10 @@
 import unittest
 from collections import Counter
+from itertools import product
 
 from BaseClasses import CollectionState
 from Fill import distribute_items_restrictive
+from Options import OptionError
 from test import bases
 from test.general import setup_multiworld
 from worlds.AutoWorld import call_all
@@ -163,6 +165,81 @@ class TestStuntArena(unittest.TestCase):
                 self.assertTrue(multiworld.fulfills_accessibility())
                 self.assertEqual(RVGLWorld.location_name_to_id, catalogue)
                 self.assertEqual(RVGLWorld.get_data_package_data(), data_package)
+
+
+class TestLocationPoolOptions(unittest.TestCase):
+    def test_location_option_combinations_preserve_catalogue_and_balance(self) -> None:
+        location_options = {
+            "include_single_race_wins": "single_race_win:",
+            "include_practice_stars": "practice_star:",
+            "include_normal_time_trials": "time_trial_normal:",
+            "include_reverse_time_trials": "time_trial_reverse:",
+            "include_mirror_time_trials": "time_trial_mirror:",
+            "include_stunt_arena_stars": "stunt_star:",
+        }
+        catalogue = dict(RVGLWorld.location_name_to_id)
+        data_package = RVGLWorld.get_data_package_data()
+        for enabled in product((False, True), repeat=len(location_options)):
+            options = dict(zip(location_options, enabled))
+            with self.subTest(options=options):
+                multiworld = setup_multiworld(
+                    RVGLWorld, steps=("generate_early", "create_regions"), seed=0, options=options,
+                )
+                world = multiworld.worlds[1]
+                expected_ids = {
+                    location.id for location in LOCATION_DATA
+                    if location.event_key.startswith("championship_win:")
+                    or any(options[key] and location.event_key.startswith(prefix)
+                           for key, prefix in location_options.items())
+                }
+                self.assertEqual(
+                    {location.address for location in world.get_locations() if location.address is not None},
+                    expected_ids,
+                )
+                starting_names = {item.name for item in multiworld.precollected_items[1]}
+                unlock_names = {item.name for item in ITEM_DATA if item.source is not None} - starting_names
+                if len(unlock_names) > len(expected_ids):
+                    with self.assertRaisesRegex(
+                        OptionError,
+                        f"{len(unlock_names)} unlock items.*only {len(expected_ids)} enabled reward locations.*"
+                        "Enable more Location Pool Options",
+                    ):
+                        world.create_items()
+                    self.assertFalse(multiworld.itempool)
+                else:
+                    world.create_items()
+                    world.set_rules()
+                    self.assertEqual(len(multiworld.itempool), len(expected_ids))
+                    self.assertEqual(
+                        Counter(item.name for item in multiworld.itempool if item.name != FILLER_ITEM.name),
+                        Counter(unlock_names),
+                    )
+                    distribute_items_restrictive(multiworld)
+                    call_all(multiworld, "post_fill")
+                    call_all(multiworld, "finalize_multiworld")
+                    self.assertFalse(multiworld.get_unfilled_locations())
+                    self.assertTrue(multiworld.can_beat_game())
+                    self.assertTrue(multiworld.fulfills_accessibility())
+                self.assertEqual({key: getattr(world.options, key).value for key in options}, options)
+                self.assertEqual({item.name for item in multiworld.precollected_items[1]}, starting_names)
+                self.assertEqual(RVGLWorld.location_name_to_id, catalogue)
+                self.assertEqual(RVGLWorld.get_data_package_data(), data_package)
+
+    def test_starting_inventory_can_make_exactly_enough_room(self) -> None:
+        multiworld = setup_multiworld(RVGLWorld, seed=0, options={
+            "include_normal_time_trials": False,
+            "include_reverse_time_trials": False,
+            "include_mirror_time_trials": False,
+            "include_stunt_arena_stars": True,
+            "starting_cars": 5,
+            "starting_tracks": 2,
+        })
+        self.assertEqual(len(multiworld.itempool), len(multiworld.get_unfilled_locations(1)))
+        self.assertTrue(all(item.name != FILLER_ITEM.name for item in multiworld.itempool))
+        distribute_items_restrictive(multiworld)
+        self.assertFalse(multiworld.get_unfilled_locations())
+        self.assertTrue(multiworld.can_beat_game())
+        self.assertTrue(multiworld.fulfills_accessibility())
 
 
 class TestRegionAccess(unittest.TestCase):

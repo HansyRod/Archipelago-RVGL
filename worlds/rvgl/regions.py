@@ -51,10 +51,20 @@ def _create_content_region(
     region = Region(region_name, world.player, world.multiworld)
     world.multiworld.regions.append(region)
 
+    enabled_location_types = {
+        "single_race_win": world.options.include_single_race_wins,
+        "practice_star": world.options.include_practice_stars,
+        "time_trial_normal": world.options.include_normal_time_trials,
+        "time_trial_reverse": world.options.include_reverse_time_trials,
+        "time_trial_mirror": world.options.include_mirror_time_trials,
+        "championship_win": True,
+        "stunt_star": world.options.include_stunt_arena_stars,
+    }
+    # location.event_key.partition(":")[0] extracts the location type name before the colon.
     region.add_locations({
         location.name: location.id
         for location in LOCATION_DATA
-        if location.source == source
+        if location.source == source and enabled_location_types[location.event_key.partition(":")[0]]
     }, RVGLLocation)
 
     # Access requirements are applied separately in rules.py.

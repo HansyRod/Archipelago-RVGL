@@ -149,6 +149,29 @@ class TestOutput(unittest.TestCase):
                 self.assertNotIn("Victory", archipelago["locations"])
                 self.assertEqual(json.loads(json.dumps(archipelago)), archipelago)
 
+    def test_track_check_options_filter_each_players_output(self) -> None:
+        location_options = {
+            "include_single_race_wins": "single_race_win:",
+            "include_practice_stars": "practice_star:",
+            "include_normal_time_trials": "time_trial_normal:",
+            "include_reverse_time_trials": "time_trial_reverse:",
+            "include_mirror_time_trials": "time_trial_mirror:",
+        }
+        for option, prefix in location_options.items():
+            with self.subTest(option=option):
+                multiworld = setup_multiworld(
+                    [RVGLWorld, RVGLWorld], seed=0, options=[{option: False}, {option: True}],
+                )
+                for player, world in multiworld.worlds.items():
+                    with self.subTest(player=player):
+                        mappings = build_randomizer_config(world)["archipelago"]["locations"]
+                        expected_mappings = {
+                            location.event_key: location.id for location in LOCATION_DATA
+                            if location not in STUNT_ARENA_LOCATIONS
+                            and (getattr(world.options, option) or not location.event_key.startswith(prefix))
+                        }
+                        self.assertEqual(mappings, expected_mappings)
+
     def test_output_is_reproducible_and_scoped_to_each_player(self) -> None:
         multiworld = setup_multiworld([RVGLWorld, RVGLWorld], seed=0)
         multiworld.worlds[1].push_precollected(multiworld.worlds[1].create_item("Silver Cup"))
