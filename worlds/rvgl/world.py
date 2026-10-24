@@ -7,7 +7,7 @@ from . import items, locations, output, regions, rules, web_world
 from .cars import STOCK_CARS
 from .cups import STOCK_CUPS
 from .options import RVGLOptions
-from .tracks import DC_TRACKS, STOCK_TRACKS
+from .tracks import DC_TRACKS, STOCK_TRACKS, TrackData
 
 _ITEM_DATA_BY_NAME = {
     item.name: item
@@ -35,7 +35,7 @@ class RVGLWorld(World):
     def generate_early(self) -> None:
         """Grant the initial cars, tracks, and cup using this world's seeded random generator."""
         rookie_cars = tuple(car for car in STOCK_CARS if car.rating == 0)
-        easy_tracks = tuple(track for track in (*STOCK_TRACKS, *DC_TRACKS) if track.difficulty == 1)
+        easy_tracks = tuple(track for track in self.get_enabled_tracks() if track.difficulty == 1)
         bronze_cup = next(cup for cup in STOCK_CUPS if cup.folder == "bronze")
 
         starting_item_names = [
@@ -60,7 +60,7 @@ class RVGLWorld(World):
         starting_item_names = {item.name for item in self.multiworld.precollected_items[self.player]}
         itempool = [
             self.create_item(item.name)
-            for item in items.ITEM_DATA
+            for item in self.get_enabled_item_data()
             if item.name != items.FILLER_ITEM.name and item.name not in starting_item_names
         ]
 
@@ -76,6 +76,18 @@ class RVGLWorld(World):
 
         itempool.extend(self.create_filler() for _ in range(location_count - len(itempool)))
         self.multiworld.itempool.extend(itempool)
+
+    def get_enabled_item_data(self) -> tuple[items.ItemData, ...]:
+        """Return the item definitions enabled by this player's item-pool options."""
+        return tuple(
+            item for item in items.ITEM_DATA
+            if (self.options.include_dreamcast_cars or item not in items.DC_CAR_ITEMS)
+            and (self.options.include_rooftops or item not in items.DC_TRACK_ITEMS)
+        )
+
+    def get_enabled_tracks(self) -> tuple[TrackData, ...]:
+        """Return the tracks enabled by this player's item-pool options."""
+        return (*STOCK_TRACKS, *DC_TRACKS) if self.options.include_rooftops else STOCK_TRACKS
 
     def create_item(self, name: str) -> items.RVGLItem:
         try:

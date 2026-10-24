@@ -25,6 +25,16 @@ class StartingTracks(Range):
     default = 1
 
 
+class IncludeDreamcastCars(Toggle):
+    """Include the 14 Dreamcast cars as unlock items in the item pool."""
+    display_name = "Include Dreamcast Cars"
+
+
+class IncludeRooftops(Toggle):
+    """Include Rooftops as an unlock item and enable its location checks."""
+    display_name = "Include Rooftops"
+
+
 class IncludeSingleRaceWins(DefaultOnToggle):
     """Include Single Race wins on each track as location checks.
 
@@ -64,6 +74,8 @@ class RVGLOptions(PerGameCommonOptions):
     """RVGL-specific options and Archipelago's common settings."""
     starting_cars: StartingCars
     starting_tracks: StartingTracks
+    include_dreamcast_cars: IncludeDreamcastCars
+    include_rooftops: IncludeRooftops
     include_single_race_wins: IncludeSingleRaceWins
     include_practice_stars: IncludePracticeStars
     include_normal_time_trials: IncludeNormalTimeTrials
@@ -74,6 +86,7 @@ class RVGLOptions(PerGameCommonOptions):
 
 option_groups = [
     OptionGroup("Starting Content Options", [StartingCars, StartingTracks]),
+    OptionGroup("Item Pool Options", [IncludeDreamcastCars, IncludeRooftops]),
     OptionGroup("Location Pool Options", [
         IncludeSingleRaceWins,
         IncludePracticeStars,

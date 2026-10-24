@@ -1,6 +1,7 @@
 import json
 import tempfile
 import unittest
+from itertools import product
 from pathlib import Path
 
 from test.general import setup_multiworld
@@ -25,13 +26,18 @@ class TestOutput(unittest.TestCase):
         self.assertEqual(config["metadata"]["seed"], multiworld.seed_name)
         self.assertEqual(config["metadata"]["version"], "0.2.0")
         self.assertRegex(config["metadata"]["profileName"], r"^ap_[0-9a-f]{12}$")
-        self.assertFalse(any(config["global_options"].values()))
+        self.assertTrue(config["global_options"]["is_stock_cars"])
+        self.assertTrue(config["global_options"]["is_stock_tracks"])
+        self.assertFalse(any(
+            value for key, value in config["global_options"].items()
+            if key not in {"is_stock_cars", "is_stock_tracks"}
+        ))
         self.assertEqual(config["extraCars"], [])
         self.assertEqual([car["folder"] for car in config["stockCars"]], [car.folder for car in STOCK_CARS])
         self.assertEqual([car["folder"] for car in config["dcCars"]], [car.folder for car in DC_CARS])
         # The runtime assigns track configs by slot, rather than looking them up by folder.
         self.assertEqual([track["folder"] for track in config["tracks"]], [
-            "nhood1", "market2", "muse2", "garden1", "roof", "toylite", "wild_west1",
+            "nhood1", "market2", "muse2", "garden1", "toylite", "wild_west1",
             "toy2", "nhood2", "ship1", "muse1", "market1", "wild_west2", "ship2",
         ])
 
@@ -49,7 +55,7 @@ class TestOutput(unittest.TestCase):
             self.assertEqual((cup["name"], cup["difficulty"]), (data.display_name, data.difficulty))
             entries.append((cup, "obtainCondition", get_cup_item_name(data), f"cup:{data.difficulty}"))
 
-        self.assertEqual(len(entries), 60)
+        self.assertEqual(len(entries), len(STOCK_CARS) + len(DC_CARS) + len(STOCK_TRACKS) + len(STOCK_CUPS))
         for entry, obtain_key, item_name, required_item in entries:
             with self.subTest(item=item_name):
                 self.assertEqual(entry[obtain_key], 13)
@@ -78,7 +84,6 @@ class TestOutput(unittest.TestCase):
                     self.assertIsInstance(stage["isReverse"], bool)
                     self.assertIsInstance(stage["isMirror"], bool)
         self.assertEqual([len(cup["stages"]) for cup in config["cups"]], [4, 4, 4, 5])
-        self.assertEqual(config["cups"][1]["stages"][0]["trackFolder"], "roof")
         self.assertEqual(config["cups"][2]["stages"][1], {
             "trackFolder": "toylite", "numLaps": 8, "isReverse": False, "isMirror": True,
         })
@@ -122,7 +127,8 @@ class TestOutput(unittest.TestCase):
                 active_locations = {
                     location.name: location.id
                     for location in LOCATION_DATA
-                    if location not in STUNT_ARENA_LOCATIONS or world.options.include_stunt_arena_stars
+                    if location.source not in DC_TRACKS
+                    and (location not in STUNT_ARENA_LOCATIONS or world.options.include_stunt_arena_stars)
                 }
                 for mapping, registered_ids in (
                     (archipelago["items"], world.item_name_to_id),
@@ -168,9 +174,54 @@ class TestOutput(unittest.TestCase):
                         expected_mappings = {
                             location.event_key: location.id for location in LOCATION_DATA
                             if location not in STUNT_ARENA_LOCATIONS
+                            and location.source not in DC_TRACKS
                             and (getattr(world.options, option) or not location.event_key.startswith(prefix))
                         }
                         self.assertEqual(mappings, expected_mappings)
+
+    def test_dreamcast_options_update_track_slots_and_silver_cup(self) -> None:
+        # Keep expected layouts independent of CUP_STAGES to catch incorrect definitions.
+        expected_stages = {
+            False: [
+                ("toylite", 6, False, False),
+                ("nhood1", 4, False, True),
+                ("wild_west1", 4, False, False),
+                ("toy2", 4, False, False),
+            ],
+            True: [
+                ("roof", 4, False, False),
+                ("toylite", 6, False, False),
+                ("wild_west1", 4, False, False),
+                ("toy2", 4, False, False),
+            ],
+        }
+        options = [
+            {"include_dreamcast_cars": cars, "include_rooftops": rooftops}
+            for cars, rooftops in product((False, True), repeat=2)
+        ]
+        multiworld = setup_multiworld([RVGLWorld] * len(options), seed=0, options=options)
+        for player, world in multiworld.worlds.items():
+            with self.subTest(player=player, options=options[player - 1]):
+                config = build_randomizer_config(world)
+                self.assertEqual(config["global_options"]["is_stock_cars"], not world.options.include_dreamcast_cars)
+                self.assertEqual(config["global_options"]["is_stock_tracks"], not world.options.include_rooftops)
+                expected_tracks = [track.folder for track in STOCK_TRACKS]
+                if world.options.include_rooftops:
+                    expected_tracks.insert(4, "roof")
+                self.assertEqual([track["folder"] for track in config["tracks"]], expected_tracks)
+                self.assertEqual([
+                    (stage["trackFolder"], stage["numLaps"], stage["isReverse"], stage["isMirror"])
+                    for stage in config["cups"][1]["stages"]
+                ], expected_stages[bool(world.options.include_rooftops)])
+                self.assertEqual(
+                    {key: value for key, value in config["archipelago"]["locations"].items() if key.endswith(":roof")},
+                    {location.event_key: location.id for location in LOCATION_DATA if location.source in DC_TRACKS}
+                    if world.options.include_rooftops else {},
+                )
+                self.assertEqual([car["folder"] for car in config["dcCars"]], [car.folder for car in DC_CARS])
+                for car, data in zip(config["dcCars"], DC_CARS):
+                    self.assertEqual(car["obtain"], 13)
+                    self.assertEqual(car["customUnlock"]["archipelagoItem"], f"car:{data.folder}")
 
     def test_output_is_reproducible_and_scoped_to_each_player(self) -> None:
         multiworld = setup_multiworld([RVGLWorld, RVGLWorld], seed=0)

@@ -8,7 +8,6 @@ from .cups import STOCK_CUPS
 from .items import get_cup_item_name, get_track_item_name
 from .locations import get_championship_location_name
 from .regions import get_cup_region_name, get_track_region_name
-from .tracks import DC_TRACKS, STOCK_TRACKS
 
 if TYPE_CHECKING:
     from .world import RVGLWorld
@@ -16,7 +15,7 @@ if TYPE_CHECKING:
 
 def set_rules(world: RVGLWorld) -> None:
     """Require each region's unlock item and define completion as winning the goal cup."""
-    for track in (*STOCK_TRACKS, *DC_TRACKS):
+    for track in world.get_enabled_tracks():
         entrance = world.get_entrance(f"Menu to {get_track_region_name(track)}")
         world.set_rule(entrance, Has(get_track_item_name(track)))
 

@@ -21,7 +21,7 @@ ARCHIPELAGO_SCHEMA_VERSION = 1
 # The DLL uses positional track slots, including Rooftops at index 4.
 TRACK_SLOTS = (*STOCK_TRACKS[:4], *DC_TRACKS, *STOCK_TRACKS[4:])
 
-# Match the 14-track default stage layout in the randomizer's cups.rs.
+# Match the PC and DC default stage layouts in the randomizer's cups.rs.
 # Each stage is (track folder, laps, reverse, mirror).
 CUP_STAGES = {
     "bronze": (
@@ -31,6 +31,12 @@ CUP_STAGES = {
         ("garden1", 5, False, False),
     ),
     "silver": (
+        ("toylite", 6, False, False),
+        ("nhood1", 4, False, True),
+        ("wild_west1", 4, False, False),
+        ("toy2", 4, False, False),
+    ),
+    "silver-dc": (
         ("roof", 4, False, False),
         ("toylite", 6, False, False),
         ("wild_west1", 4, False, False),
@@ -93,7 +99,8 @@ def _build_track_config(track: TrackData) -> dict[str, Any]:
     }
 
 
-def _build_cup_config(cup: CupData) -> dict[str, Any]:
+def _build_cup_config(cup: CupData, include_rooftops: bool) -> dict[str, Any]:
+    stages = CUP_STAGES["silver-dc" if cup.folder == "silver" and include_rooftops else cup.folder]
     return {
         "name": cup.display_name,
         "difficulty": cup.difficulty,
@@ -106,7 +113,7 @@ def _build_cup_config(cup: CupData) -> dict[str, Any]:
         "pointsTable": [10, 6, 4, 3, 2, 1] + [0] * 24,
         "stages": [
             {"trackFolder": folder, "numLaps": laps, "isReverse": reverse, "isMirror": mirror}
-            for folder, laps, reverse, mirror in CUP_STAGES[cup.folder]
+            for folder, laps, reverse, mirror in stages
         ],
     }
 
@@ -145,17 +152,22 @@ def build_randomizer_config(world: RVGLWorld) -> dict[str, Any]:
             "load_extra_cars": False,
             "load_extra_tracks": False,
             "load_extra_cups": False,
-            # Both flags describe PC-only stock mode; this world includes DC content.
-            "is_stock_cars": False,
-            "is_stock_tracks": False,
+            # Both flags describe PC-only stock mode for their content type.
+            "is_stock_cars": not world.options.include_dreamcast_cars,
+            "is_stock_tracks": not world.options.include_rooftops,
             "enable_30_car_mode": False,
             "enable_knockout_mode": False,
         },
         "stockCars": [_build_car_config(car) for car in STOCK_CARS],
+        # Keep AP-locked definitions even when their items are excluded; an empty
+        # list makes the DLL fall back to vanilla Dreamcast car unlocks.
         "dcCars": [_build_car_config(car) for car in DC_CARS],
         "extraCars": [],
-        "tracks": [_build_track_config(track) for track in TRACK_SLOTS],
-        "cups": [_build_cup_config(cup) for cup in STOCK_CUPS],
+        "tracks": [
+            _build_track_config(track)
+            for track in (TRACK_SLOTS if world.options.include_rooftops else STOCK_TRACKS)
+        ],
+        "cups": [_build_cup_config(cup, bool(world.options.include_rooftops)) for cup in STOCK_CUPS],
         "archipelago": _build_archipelago_config(world),
     }
 

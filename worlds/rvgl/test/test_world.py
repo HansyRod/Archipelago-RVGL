@@ -10,7 +10,7 @@ from test.general import setup_multiworld
 from worlds.AutoWorld import call_all
 
 from .. import RVGLWorld
-from ..cars import STOCK_CARS, CarData
+from ..cars import DC_CARS, STOCK_CARS, CarData
 from ..cups import STOCK_CUPS, CupData
 from ..items import FILLER_ITEM, ITEM_DATA, get_cup_item_name, get_track_item_name
 from ..locations import EVENT_KEY_TO_LOCATION_ID, LOCATION_DATA, STUNT_ARENA_LOCATIONS
@@ -47,7 +47,10 @@ class TestRVGL(bases.WorldTestBase):
 
     def test_item_pool_contains_each_remaining_unlock_once(self) -> None:
         starting_names = {item.name for item in self.multiworld.precollected_items[self.player]}
-        unlock_names = {item.name for item in ITEM_DATA if item.source is not None}
+        unlock_names = {
+            item.name for item in ITEM_DATA
+            if item.source is not None and item.source not in DC_CARS and item.source not in DC_TRACKS
+        }
         pool = [item for item in self.multiworld.itempool if item.player == self.player]
         pool_counts = Counter(item.name for item in pool)
 
@@ -106,6 +109,45 @@ class TestStartingTracks(unittest.TestCase):
                     self.assertEqual(pool_counts[item_name], 1)
 
 
+class TestItemPoolOptions(unittest.TestCase):
+    def test_dreamcast_content_is_selected_independently_for_each_player(self) -> None:
+        options = [
+            {"include_dreamcast_cars": cars, "include_rooftops": rooftops}
+            for cars, rooftops in product((False, True), repeat=2)
+        ]
+        catalogue = dict(RVGLWorld.location_name_to_id)
+        item_catalogue = dict(RVGLWorld.item_name_to_id)
+        multiworld = setup_multiworld([RVGLWorld] * len(options), seed=0, options=options)
+        for player, world in multiworld.worlds.items():
+            with self.subTest(player=player, options=options[player - 1]):
+                starting_names = {item.name for item in multiworld.precollected_items[player]}
+                unlock_names = {
+                    item.name for item in ITEM_DATA
+                    if item.source is not None
+                    and (world.options.include_dreamcast_cars or item.source not in DC_CARS)
+                    and (world.options.include_rooftops or item.source not in DC_TRACKS)
+                } - starting_names
+                pool = [item for item in multiworld.itempool if item.player == player]
+                self.assertEqual(
+                    Counter(item.name for item in pool if item.name != FILLER_ITEM.name), Counter(unlock_names),
+                )
+                self.assertEqual(len(pool), len(multiworld.get_unfilled_locations(player)))
+                self.assertEqual(
+                    {location.address for location in world.get_locations() if location.address is not None},
+                    {location.id for location in LOCATION_DATA
+                     if location not in STUNT_ARENA_LOCATIONS
+                     and (world.options.include_rooftops or location.source not in DC_TRACKS)},
+                )
+                self.assertEqual(world.location_name_to_id, catalogue)
+                self.assertEqual(world.item_name_to_id, item_catalogue)
+        distribute_items_restrictive(multiworld)
+        call_all(multiworld, "post_fill")
+        call_all(multiworld, "finalize_multiworld")
+        self.assertFalse(multiworld.get_unfilled_locations())
+        self.assertTrue(multiworld.can_beat_game())
+        self.assertTrue(multiworld.fulfills_accessibility())
+
+
 class TestStuntArena(unittest.TestCase):
     def test_stunt_star_catalogue_matches_dll_events(self) -> None:
         self.assertEqual(len(STUNT_ARENA_LOCATIONS), STOCK_STUNT_ARENA_STAR_COUNT)
@@ -141,6 +183,7 @@ class TestStuntArena(unittest.TestCase):
                         location.address for location in world.get_locations() if location.address is not None
                     }
                     expected_ids = set(catalogue.values())
+                    expected_ids -= {location.id for location in LOCATION_DATA if location.source in DC_TRACKS}
                     if player != enabled_player:
                         expected_ids -= stunt_ids
                     self.assertEqual(active_ids, expected_ids)
@@ -179,8 +222,9 @@ class TestLocationPoolOptions(unittest.TestCase):
         }
         catalogue = dict(RVGLWorld.location_name_to_id)
         data_package = RVGLWorld.get_data_package_data()
-        for enabled in product((False, True), repeat=len(location_options)):
-            options = dict(zip(location_options, enabled))
+        item_options = ("include_dreamcast_cars", "include_rooftops")
+        for enabled in product((False, True), repeat=len(location_options) + len(item_options)):
+            options = dict(zip((*location_options, *item_options), enabled))
             with self.subTest(options=options):
                 multiworld = setup_multiworld(
                     RVGLWorld, steps=("generate_early", "create_regions"), seed=0, options=options,
@@ -188,20 +232,26 @@ class TestLocationPoolOptions(unittest.TestCase):
                 world = multiworld.worlds[1]
                 expected_ids = {
                     location.id for location in LOCATION_DATA
-                    if location.event_key.startswith("championship_win:")
-                    or any(options[key] and location.event_key.startswith(prefix)
-                           for key, prefix in location_options.items())
+                    if (options["include_rooftops"] or location.source not in DC_TRACKS)
+                    and (location.event_key.startswith("championship_win:")
+                         or any(options[key] and location.event_key.startswith(prefix)
+                                for key, prefix in location_options.items()))
                 }
                 self.assertEqual(
                     {location.address for location in world.get_locations() if location.address is not None},
                     expected_ids,
                 )
                 starting_names = {item.name for item in multiworld.precollected_items[1]}
-                unlock_names = {item.name for item in ITEM_DATA if item.source is not None} - starting_names
+                unlock_names = {
+                    item.name for item in ITEM_DATA
+                    if item.source is not None
+                    and (options["include_dreamcast_cars"] or item.source not in DC_CARS)
+                    and (options["include_rooftops"] or item.source not in DC_TRACKS)
+                } - starting_names
                 if len(unlock_names) > len(expected_ids):
                     with self.assertRaisesRegex(
                         OptionError,
-                        f"{len(unlock_names)} unlock items.*only {len(expected_ids)} enabled reward locations.*"
+                        f"{len(unlock_names)} unlock items.*only {len(expected_ids)} enabled locations.*"
                         "Enable more Location Pool Options",
                     ):
                         world.create_items()
@@ -227,6 +277,8 @@ class TestLocationPoolOptions(unittest.TestCase):
 
     def test_starting_inventory_can_make_exactly_enough_room(self) -> None:
         multiworld = setup_multiworld(RVGLWorld, seed=0, options={
+            "include_dreamcast_cars": True,
+            "include_rooftops": True,
             "include_normal_time_trials": False,
             "include_reverse_time_trials": False,
             "include_mirror_time_trials": False,
@@ -247,6 +299,7 @@ class TestRegionAccess(unittest.TestCase):
         # Omit starting inventory so every region's requirement can be tested independently.
         multiworld = setup_multiworld(
             [RVGLWorld, RVGLWorld], steps=("create_regions", "set_rules"), seed=0,
+            options={"include_rooftops": True},
         )
         requirements = [
             (get_track_region_name(track), get_track_item_name(track))

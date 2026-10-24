@@ -8,7 +8,7 @@ from .cups import STOCK_CUPS, CupData
 from .items import RVGLItem
 from .locations import LOCATION_DATA, RVGLLocation
 from .stunt_arena import STOCK_STUNT_ARENA, StuntArenaData
-from .tracks import DC_TRACKS, STOCK_TRACKS, TrackData
+from .tracks import TrackData
 
 if TYPE_CHECKING:
     from .world import RVGLWorld
@@ -29,7 +29,7 @@ def create_regions(world: RVGLWorld) -> None:
     menu = Region("Menu", world.player, world.multiworld)
     world.multiworld.regions.append(menu)
 
-    for track in (*STOCK_TRACKS, *DC_TRACKS):
+    for track in world.get_enabled_tracks():
         _create_content_region(world, menu, get_track_region_name(track), track)
 
     for cup in STOCK_CUPS:
