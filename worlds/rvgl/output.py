@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any
 
 from .cars import DC_CARS, STOCK_CARS, CarData
 from .cups import STOCK_CUPS, CupData
-from .items import ITEM_DATA, SourceData, get_archipelago_item_name, get_car_item_name, get_cup_item_name, get_track_item_name
+from .items import ITEM_DATA, SourceData, get_archipelago_item_name
 from .locations import EVENT_KEY_TO_LOCATION_ID, get_championship_event_key
 from .tracks import DC_TRACKS, STOCK_TRACKS, TrackData
 
@@ -60,14 +60,11 @@ CUP_CARS_PER_CLASS = {
 
 
 def _get_unlock_fields(
-    item_name: str,
     source: SourceData,
-    starting_names: set[str],
     obtain_key: str = "obtain",
 ) -> dict[str, Any]:
-    if item_name in starting_names:
-        return {obtain_key: 0}
-
+    # Starting items arrive through Archipelago's precollected inventory, so
+    # every unlock uses the same item condition, including starting content.
     return {
         obtain_key: 13,
         "customUnlock": {
@@ -78,29 +75,29 @@ def _get_unlock_fields(
     }
 
 
-def _build_car_config(car: CarData, starting_names: set[str]) -> dict[str, Any]:
+def _build_car_config(car: CarData) -> dict[str, Any]:
     return {
         "folder": car.folder,
         "rating": car.rating,
         "selectable_player": True,
         "selectable_cpu": True,
-        **_get_unlock_fields(get_car_item_name(car), car, starting_names),
+        **_get_unlock_fields(car),
     }
 
 
-def _build_track_config(track: TrackData, starting_names: set[str]) -> dict[str, Any]:
+def _build_track_config(track: TrackData) -> dict[str, Any]:
     return {
         "folder": track.folder,
         "difficulty": track.difficulty,
-        **_get_unlock_fields(get_track_item_name(track), track, starting_names),
+        **_get_unlock_fields(track),
     }
 
 
-def _build_cup_config(cup: CupData, starting_names: set[str]) -> dict[str, Any]:
+def _build_cup_config(cup: CupData) -> dict[str, Any]:
     return {
         "name": cup.display_name,
         "difficulty": cup.difficulty,
-        **_get_unlock_fields(get_cup_item_name(cup), cup, starting_names, "obtainCondition"),
+        **_get_unlock_fields(cup, "obtainCondition"),
         "numCars": 8,
         "numTries": 3,
         "perRaceRequiredPlace": 3,
@@ -127,7 +124,6 @@ def _build_archipelago_config(world: RVGLWorld) -> dict[str, Any]:
 
 def build_randomizer_config(world: RVGLWorld) -> dict[str, Any]:
     """Build the DLL config and AP mappings without changing the generated content or AP state."""
-    starting_names = {item.name for item in world.multiworld.precollected_items[world.player]}
     profile_identity = f"{world.multiworld.seed_name}:{world.player}"
     profile_name = "ap_" + hashlib.sha256(profile_identity.encode("utf-8")).hexdigest()[:12]
 
@@ -147,11 +143,11 @@ def build_randomizer_config(world: RVGLWorld) -> dict[str, Any]:
             "enable_30_car_mode": False,
             "enable_knockout_mode": False,
         },
-        "stockCars": [_build_car_config(car, starting_names) for car in STOCK_CARS],
-        "dcCars": [_build_car_config(car, starting_names) for car in DC_CARS],
+        "stockCars": [_build_car_config(car) for car in STOCK_CARS],
+        "dcCars": [_build_car_config(car) for car in DC_CARS],
         "extraCars": [],
-        "tracks": [_build_track_config(track, starting_names) for track in TRACK_SLOTS],
-        "cups": [_build_cup_config(cup, starting_names) for cup in STOCK_CUPS],
+        "tracks": [_build_track_config(track) for track in TRACK_SLOTS],
+        "cups": [_build_cup_config(cup) for cup in STOCK_CUPS],
         "archipelago": _build_archipelago_config(world),
     }
 

@@ -18,7 +18,6 @@ class TestOutput(unittest.TestCase):
     def test_config_preserves_content_and_starting_unlocks(self) -> None:
         multiworld = setup_multiworld(RVGLWorld, seed=0)
         config = build_randomizer_config(multiworld.worlds[1])
-        starting_names = {item.name for item in multiworld.precollected_items[1]}
         self.assertEqual(set(config), {
             "metadata", "global_options", "stockCars", "dcCars", "extraCars", "tracks", "cups", "archipelago",
         })
@@ -52,14 +51,10 @@ class TestOutput(unittest.TestCase):
         self.assertEqual(len(entries), 60)
         for entry, obtain_key, item_name, required_item in entries:
             with self.subTest(item=item_name):
-                if item_name in starting_names:
-                    self.assertEqual(entry[obtain_key], 0)
-                    self.assertNotIn("customUnlock", entry)
-                else:
-                    self.assertEqual(entry[obtain_key], 13)
-                    self.assertEqual(entry["customUnlock"], {
-                        "trackFolder": [], "requiredCount": 0, "archipelagoItem": required_item,
-                    })
+                self.assertEqual(entry[obtain_key], 13)
+                self.assertEqual(entry["customUnlock"], {
+                    "trackFolder": [], "requiredCount": 0, "archipelagoItem": required_item,
+                })
 
     def test_cups_have_valid_defaults_and_stage_variants(self) -> None:
         multiworld = setup_multiworld(RVGLWorld, seed=0)
@@ -141,7 +136,7 @@ class TestOutput(unittest.TestCase):
                 contents = path.read_bytes()
                 config = json.loads(contents)
                 self.assertEqual(config, build_randomizer_config(world))
-                self.assertEqual(config["cups"][1]["obtainCondition"], 0 if player == 1 else 13)
+                self.assertEqual(config["cups"][1]["obtainCondition"], 13)
                 profiles.add(config["metadata"]["profileName"])
                 world.generate_output(directory)
                 self.assertEqual(path.read_bytes(), contents)
