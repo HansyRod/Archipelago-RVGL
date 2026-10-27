@@ -9,7 +9,15 @@ from test.general import setup_multiworld
 from .. import RVGLWorld
 from ..cars import DC_CARS, STOCK_CARS, CarData
 from ..cups import STOCK_CUPS
-from ..items import FILLER_ITEM, STUNT_ARENA_ID_OFFSET, get_car_item_name, get_cup_item_name, get_track_item_name
+from ..items import (
+    DC_CAR_ITEMS,
+    FILLER_ITEM,
+    STOCK_CAR_ITEMS,
+    STUNT_ARENA_ID_OFFSET,
+    get_car_item_name,
+    get_cup_item_name,
+    get_track_item_name,
+)
 from ..locations import LOCATION_DATA, STUNT_ARENA_LOCATIONS
 from ..output import build_randomizer_config
 from ..stunt_arena import STOCK_STUNT_ARENA_STAR_COUNT
@@ -168,7 +176,8 @@ class TestOutput(unittest.TestCase):
         for option, prefix in location_options.items():
             with self.subTest(option=option):
                 multiworld = setup_multiworld(
-                    [RVGLWorld, RVGLWorld], seed=0, options=[{option: False}, {option: True}],
+                    [RVGLWorld, RVGLWorld], seed=0,
+                    options=[{option: False, "carsanity": "enabled"}, {option: True, "carsanity": "enabled"}],
                 )
                 for player, world in multiworld.worlds.items():
                     with self.subTest(player=player):
@@ -176,7 +185,7 @@ class TestOutput(unittest.TestCase):
                         expected_mappings = {
                             location.event_key: location.id for location in LOCATION_DATA
                             if location not in STUNT_ARENA_LOCATIONS
-                            and not isinstance(location.source, CarData)
+                            and location.source not in DC_CARS
                             and location.source not in DC_TRACKS
                             and (getattr(world.options, option) or not location.event_key.startswith(prefix))
                         }
@@ -226,8 +235,46 @@ class TestOutput(unittest.TestCase):
                     self.assertEqual(car["obtain"], 13)
                     self.assertEqual(car["customUnlock"]["archipelagoItem"], f"car:{data.folder}")
 
+    def test_carsanity_output_matches_each_players_car_pool_and_track_check_options(self) -> None:
+        options = [
+            {"carsanity": carsanity, "include_dreamcast_cars": cars, "include_single_race_wins": race_wins,
+             "starting_tracks": 0}
+            for carsanity, cars, race_wins in product(("disabled", "enabled"), (False, True), (False, True))
+        ]
+        multiworld = setup_multiworld([RVGLWorld] * len(options), seed=0, options=options)
+        for player, world in multiworld.worlds.items():
+            with self.subTest(player=player, options=options[player - 1]):
+                config = json.loads(json.dumps(build_randomizer_config(world)))
+                archipelago = config["archipelago"]
+                enabled = options[player - 1]["carsanity"] == "enabled"
+                dreamcast = options[player - 1]["include_dreamcast_cars"]
+                self.assertIs(archipelago["carsanity"], enabled)
+                car_items = (*STOCK_CAR_ITEMS, *DC_CAR_ITEMS) if dreamcast else STOCK_CAR_ITEMS
+                expected_car_checks = {
+                    f"car_race_win:{item.source.folder}": item.id + 1 for item in car_items
+                } if enabled else {}
+                car_checks = {key: value for key, value in archipelago["locations"].items()
+                              if key.startswith("car_race_win:")}
+                self.assertEqual(car_checks, expected_car_checks)
+                self.assertEqual(len(car_checks), (42 if dreamcast else 28) if enabled else 0)
+                self.assertEqual(set(archipelago["locations"].values()),
+                                 {location.address for location in world.get_locations() if location.address is not None})
+                self.assertEqual(archipelago["slotNumber"], player)
+                self.assertEqual(archipelago["goalEventKey"], "championship_win:4")
+                self.assertEqual(world.fill_slot_data(), {"goalEventKey": "championship_win:4"})
+                self.assertNotIn("Victory", archipelago["locations"])
+                race_checks = [key for key in archipelago["locations"] if key.startswith("single_race_win:")]
+                self.assertEqual(len(race_checks), 13 if options[player - 1]["include_single_race_wins"] else 0)
+                starting_names = {item.name for item in multiworld.precollected_items[player]}
+                for item in car_items:
+                    if enabled and item.name in starting_names:
+                        self.assertIn(f"car_race_win:{item.source.folder}", car_checks)
+
     def test_output_is_reproducible_and_scoped_to_each_player(self) -> None:
-        multiworld = setup_multiworld([RVGLWorld, RVGLWorld], seed=0)
+        multiworld = setup_multiworld(
+            [RVGLWorld, RVGLWorld], seed=0,
+            options=[{"carsanity": "enabled", "include_dreamcast_cars": True}, {"carsanity": "disabled"}],
+        )
         multiworld.worlds[1].push_precollected(multiworld.worlds[1].create_item("Silver Cup"))
         profiles = set()
         with tempfile.TemporaryDirectory() as directory:
