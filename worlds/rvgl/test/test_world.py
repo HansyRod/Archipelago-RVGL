@@ -112,7 +112,7 @@ class TestStartingTracks(unittest.TestCase):
 class TestItemPoolOptions(unittest.TestCase):
     def test_dreamcast_content_is_selected_independently_for_each_player(self) -> None:
         options = [
-            {"include_dreamcast_cars": cars, "include_rooftops": rooftops}
+            {"include_dreamcast_cars": cars, "include_dreamcast_track_rooftops": rooftops}
             for cars, rooftops in product((False, True), repeat=2)
         ]
         catalogue = dict(RVGLWorld.location_name_to_id)
@@ -125,7 +125,7 @@ class TestItemPoolOptions(unittest.TestCase):
                     item.name for item in ITEM_DATA
                     if item.source is not None
                     and (world.options.include_dreamcast_cars or item.source not in DC_CARS)
-                    and (world.options.include_rooftops or item.source not in DC_TRACKS)
+                    and (world.options.include_dreamcast_track_rooftops or item.source not in DC_TRACKS)
                 } - starting_names
                 pool = [item for item in multiworld.itempool if item.player == player]
                 self.assertEqual(
@@ -136,7 +136,7 @@ class TestItemPoolOptions(unittest.TestCase):
                     {location.address for location in world.get_locations() if location.address is not None},
                     {location.id for location in LOCATION_DATA
                      if location not in STUNT_ARENA_LOCATIONS
-                     and (world.options.include_rooftops or location.source not in DC_TRACKS)},
+                     and (world.options.include_dreamcast_track_rooftops or location.source not in DC_TRACKS)},
                 )
                 self.assertEqual(world.location_name_to_id, catalogue)
                 self.assertEqual(world.item_name_to_id, item_catalogue)
@@ -222,7 +222,7 @@ class TestLocationPoolOptions(unittest.TestCase):
         }
         catalogue = dict(RVGLWorld.location_name_to_id)
         data_package = RVGLWorld.get_data_package_data()
-        item_options = ("include_dreamcast_cars", "include_rooftops")
+        item_options = ("include_dreamcast_cars", "include_dreamcast_track_rooftops")
         for enabled in product((False, True), repeat=len(location_options) + len(item_options)):
             options = dict(zip((*location_options, *item_options), enabled))
             with self.subTest(options=options):
@@ -232,7 +232,7 @@ class TestLocationPoolOptions(unittest.TestCase):
                 world = multiworld.worlds[1]
                 expected_ids = {
                     location.id for location in LOCATION_DATA
-                    if (options["include_rooftops"] or location.source not in DC_TRACKS)
+                    if (options["include_dreamcast_track_rooftops"] or location.source not in DC_TRACKS)
                     and (location.event_key.startswith("championship_win:")
                          or any(options[key] and location.event_key.startswith(prefix)
                                 for key, prefix in location_options.items()))
@@ -246,7 +246,7 @@ class TestLocationPoolOptions(unittest.TestCase):
                     item.name for item in ITEM_DATA
                     if item.source is not None
                     and (options["include_dreamcast_cars"] or item.source not in DC_CARS)
-                    and (options["include_rooftops"] or item.source not in DC_TRACKS)
+                    and (options["include_dreamcast_track_rooftops"] or item.source not in DC_TRACKS)
                 } - starting_names
                 if len(unlock_names) > len(expected_ids):
                     with self.assertRaisesRegex(
@@ -278,7 +278,7 @@ class TestLocationPoolOptions(unittest.TestCase):
     def test_starting_inventory_can_make_exactly_enough_room(self) -> None:
         multiworld = setup_multiworld(RVGLWorld, seed=0, options={
             "include_dreamcast_cars": True,
-            "include_rooftops": True,
+            "include_dreamcast_track_rooftops": True,
             "include_normal_time_trials": False,
             "include_reverse_time_trials": False,
             "include_mirror_time_trials": False,
@@ -299,7 +299,7 @@ class TestRegionAccess(unittest.TestCase):
         # Omit starting inventory so every region's requirement can be tested independently.
         multiworld = setup_multiworld(
             [RVGLWorld, RVGLWorld], steps=("create_regions", "set_rules"), seed=0,
-            options={"include_rooftops": True},
+            options={"include_dreamcast_track_rooftops": True},
         )
         requirements = [
             (get_track_region_name(track), get_track_item_name(track))

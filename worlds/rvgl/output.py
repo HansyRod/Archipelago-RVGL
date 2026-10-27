@@ -99,8 +99,8 @@ def _build_track_config(track: TrackData) -> dict[str, Any]:
     }
 
 
-def _build_cup_config(cup: CupData, include_rooftops: bool) -> dict[str, Any]:
-    stages = CUP_STAGES["silver-dc" if cup.folder == "silver" and include_rooftops else cup.folder]
+def _build_cup_config(cup: CupData, include_dreamcast_track_rooftops: bool) -> dict[str, Any]:
+    stages = CUP_STAGES["silver-dc" if cup.folder == "silver" and include_dreamcast_track_rooftops else cup.folder]
     return {
         "name": cup.display_name,
         "difficulty": cup.difficulty,
@@ -154,7 +154,7 @@ def build_randomizer_config(world: RVGLWorld) -> dict[str, Any]:
             "load_extra_cups": False,
             # Both flags describe PC-only stock mode for their content type.
             "is_stock_cars": not world.options.include_dreamcast_cars,
-            "is_stock_tracks": not world.options.include_rooftops,
+            "is_stock_tracks": not world.options.include_dreamcast_track_rooftops,
             "enable_30_car_mode": False,
             "enable_knockout_mode": False,
         },
@@ -165,9 +165,9 @@ def build_randomizer_config(world: RVGLWorld) -> dict[str, Any]:
         "extraCars": [],
         "tracks": [
             _build_track_config(track)
-            for track in (TRACK_SLOTS if world.options.include_rooftops else STOCK_TRACKS)
+            for track in (TRACK_SLOTS if world.options.include_dreamcast_track_rooftops else STOCK_TRACKS)
         ],
-        "cups": [_build_cup_config(cup, bool(world.options.include_rooftops)) for cup in STOCK_CUPS],
+        "cups": [_build_cup_config(cup, bool(world.options.include_dreamcast_track_rooftops)) for cup in STOCK_CUPS],
         "archipelago": _build_archipelago_config(world),
     }
 

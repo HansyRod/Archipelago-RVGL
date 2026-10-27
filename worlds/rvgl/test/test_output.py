@@ -196,7 +196,7 @@ class TestOutput(unittest.TestCase):
             ],
         }
         options = [
-            {"include_dreamcast_cars": cars, "include_rooftops": rooftops}
+            {"include_dreamcast_cars": cars, "include_dreamcast_track_rooftops": rooftops}
             for cars, rooftops in product((False, True), repeat=2)
         ]
         multiworld = setup_multiworld([RVGLWorld] * len(options), seed=0, options=options)
@@ -204,19 +204,19 @@ class TestOutput(unittest.TestCase):
             with self.subTest(player=player, options=options[player - 1]):
                 config = build_randomizer_config(world)
                 self.assertEqual(config["global_options"]["is_stock_cars"], not world.options.include_dreamcast_cars)
-                self.assertEqual(config["global_options"]["is_stock_tracks"], not world.options.include_rooftops)
+                self.assertEqual(config["global_options"]["is_stock_tracks"], not world.options.include_dreamcast_track_rooftops)
                 expected_tracks = [track.folder for track in STOCK_TRACKS]
-                if world.options.include_rooftops:
+                if world.options.include_dreamcast_track_rooftops:
                     expected_tracks.insert(4, "roof")
                 self.assertEqual([track["folder"] for track in config["tracks"]], expected_tracks)
                 self.assertEqual([
                     (stage["trackFolder"], stage["numLaps"], stage["isReverse"], stage["isMirror"])
                     for stage in config["cups"][1]["stages"]
-                ], expected_stages[bool(world.options.include_rooftops)])
+                ], expected_stages[bool(world.options.include_dreamcast_track_rooftops)])
                 self.assertEqual(
                     {key: value for key, value in config["archipelago"]["locations"].items() if key.endswith(":roof")},
                     {location.event_key: location.id for location in LOCATION_DATA if location.source in DC_TRACKS}
-                    if world.options.include_rooftops else {},
+                    if world.options.include_dreamcast_track_rooftops else {},
                 )
                 self.assertEqual([car["folder"] for car in config["dcCars"]], [car.folder for car in DC_CARS])
                 for car, data in zip(config["dcCars"], DC_CARS):

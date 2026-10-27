@@ -82,12 +82,12 @@ class RVGLWorld(World):
         return tuple(
             item for item in items.ITEM_DATA
             if (self.options.include_dreamcast_cars or item not in items.DC_CAR_ITEMS)
-            and (self.options.include_rooftops or item not in items.DC_TRACK_ITEMS)
+            and (self.options.include_dreamcast_track_rooftops or item not in items.DC_TRACK_ITEMS)
         )
 
     def get_enabled_tracks(self) -> tuple[TrackData, ...]:
         """Return the tracks enabled by this player's item-pool options."""
-        return (*STOCK_TRACKS, *DC_TRACKS) if self.options.include_rooftops else STOCK_TRACKS
+        return (*STOCK_TRACKS, *DC_TRACKS) if self.options.include_dreamcast_track_rooftops else STOCK_TRACKS
 
     def create_item(self, name: str) -> items.RVGLItem:
         try:
