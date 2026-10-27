@@ -4,8 +4,17 @@ from dataclasses import dataclass
 
 from BaseClasses import Location
 
+from .cars import CarData
 from .cups import CupData
-from .items import DC_TRACK_ITEMS, STOCK_CUP_ITEMS, STOCK_TRACK_ITEMS, STUNT_ARENA_ID_OFFSET, ItemData
+from .items import (
+    DC_CAR_ITEMS,
+    DC_TRACK_ITEMS,
+    STOCK_CAR_ITEMS,
+    STOCK_CUP_ITEMS,
+    STOCK_TRACK_ITEMS,
+    STUNT_ARENA_ID_OFFSET,
+    ItemData,
+)
 from .stunt_arena import STOCK_STUNT_ARENA, StuntArenaData
 from .tracks import TrackData
 
@@ -23,7 +32,7 @@ class LocationData:
     id: int
     name: str
     event_key: str
-    source: TrackData | CupData | StuntArenaData
+    source: CarData | TrackData | CupData | StuntArenaData
 
 
 def get_single_race_location_name(track: TrackData) -> str:
@@ -47,6 +56,9 @@ def get_championship_location_name(cup: CupData) -> str:
 def get_stunt_arena_star_location_name(arena: StuntArenaData, star_number: int) -> str:
     return f"Find {arena.display_name} Star: {star_number}"
 
+def get_car_race_win_location_name(car: CarData) -> str:
+    return f"Win Race with Car: {car.display_name}"
+
 
 def get_single_race_event_key(track: TrackData) -> str:
     return f"single_race_win:{track.folder}"
@@ -68,6 +80,27 @@ def get_championship_event_key(cup: CupData) -> str:
 
 def get_stunt_arena_star_event_key(star_number: int) -> str:
     return f"stunt_star:{star_number}"
+
+def get_car_race_win_event_key(car: CarData) -> str:
+    return f"car_race_win:{car.folder}"
+
+
+def get_car_location_data(car_items: tuple[ItemData, ...]) -> tuple[LocationData, ...]:
+    locations: list[LocationData] = []
+
+    for item in car_items:
+        car = item.source
+        if not isinstance(car, CarData):
+            raise TypeError(f"Expected a car item, got {item.name!r}.")
+
+        locations.append(LocationData(
+            item.id + SINGLE_RACE_ID_OFFSET,
+            get_car_race_win_location_name(car),
+            get_car_race_win_event_key(car),
+            car,
+        ))
+
+    return tuple(locations)
 
 
 def get_track_location_data(track_items: tuple[ItemData, ...]) -> tuple[LocationData, ...]:
@@ -148,6 +181,8 @@ def get_stunt_arena_location_data(arena: StuntArenaData) -> tuple[LocationData, 
     )
 
 
+STOCK_CAR_LOCATIONS = get_car_location_data(STOCK_CAR_ITEMS)
+DC_CAR_LOCATIONS = get_car_location_data(DC_CAR_ITEMS)
 STOCK_TRACK_LOCATIONS = get_track_location_data(STOCK_TRACK_ITEMS)
 DC_TRACK_LOCATIONS = get_track_location_data(DC_TRACK_ITEMS)
 STOCK_CUP_LOCATIONS = get_cup_location_data(STOCK_CUP_ITEMS)
@@ -155,6 +190,8 @@ STUNT_ARENA_LOCATIONS = get_stunt_arena_location_data(STOCK_STUNT_ARENA)
 
 # Register every supported check here; player options only affect instantiated locations.
 LOCATION_DATA: tuple[LocationData, ...] = (
+    *STOCK_CAR_LOCATIONS,
+    *DC_CAR_LOCATIONS,
     *STOCK_TRACK_LOCATIONS,
     *DC_TRACK_LOCATIONS,
     *STOCK_CUP_LOCATIONS,

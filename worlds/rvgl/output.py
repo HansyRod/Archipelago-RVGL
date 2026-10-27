@@ -127,6 +127,7 @@ def _build_archipelago_config(world: RVGLWorld) -> dict[str, Any]:
         "schemaVersion": ARCHIPELAGO_SCHEMA_VERSION,
         "slotNumber": world.player,
         "slotName": world.player_name,
+        "carsanity": bool(world.options.carsanity),
         "locations": {
             event_key: location_id
             for event_key, location_id in EVENT_KEY_TO_LOCATION_ID.items()

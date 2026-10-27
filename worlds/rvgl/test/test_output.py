@@ -7,7 +7,7 @@ from pathlib import Path
 from test.general import setup_multiworld
 
 from .. import RVGLWorld
-from ..cars import DC_CARS, STOCK_CARS
+from ..cars import DC_CARS, STOCK_CARS, CarData
 from ..cups import STOCK_CUPS
 from ..items import FILLER_ITEM, STUNT_ARENA_ID_OFFSET, get_car_item_name, get_cup_item_name, get_track_item_name
 from ..locations import LOCATION_DATA, STUNT_ARENA_LOCATIONS
@@ -102,11 +102,12 @@ class TestOutput(unittest.TestCase):
                 config = build_randomizer_config(world)
                 archipelago = config["archipelago"]
                 self.assertEqual(set(archipelago), {
-                    "schemaVersion", "slotNumber", "slotName", "locations", "items", "goalEventKey",
+                    "schemaVersion", "slotNumber", "slotName", "carsanity", "locations", "items", "goalEventKey",
                 })
                 self.assertEqual(archipelago["schemaVersion"], 1)
                 self.assertEqual(archipelago["slotNumber"], player)
                 self.assertEqual(archipelago["slotName"], world.player_name)
+                self.assertIs(archipelago["carsanity"], False)
                 self.assertEqual(archipelago["goalEventKey"], "championship_win:4")
                 self.assertIn(archipelago["goalEventKey"], archipelago["locations"])
                 self.assertEqual(archipelago["items"][""], FILLER_ITEM.id)
@@ -128,6 +129,7 @@ class TestOutput(unittest.TestCase):
                     location.name: location.id
                     for location in LOCATION_DATA
                     if location.source not in DC_TRACKS
+                    and not isinstance(location.source, CarData)
                     and (location not in STUNT_ARENA_LOCATIONS or world.options.include_stunt_arena_stars)
                 }
                 for mapping, registered_ids in (
@@ -174,6 +176,7 @@ class TestOutput(unittest.TestCase):
                         expected_mappings = {
                             location.event_key: location.id for location in LOCATION_DATA
                             if location not in STUNT_ARENA_LOCATIONS
+                            and not isinstance(location.source, CarData)
                             and location.source not in DC_TRACKS
                             and (getattr(world.options, option) or not location.event_key.startswith(prefix))
                         }

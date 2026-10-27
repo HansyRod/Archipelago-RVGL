@@ -4,7 +4,7 @@ from Options import OptionError
 from worlds.AutoWorld import World
 
 from . import items, locations, output, regions, rules, web_world
-from .cars import STOCK_CARS
+from .cars import DC_CARS, STOCK_CARS, CarData
 from .cups import STOCK_CUPS
 from .options import RVGLOptions
 from .tracks import DC_TRACKS, STOCK_TRACKS, TrackData
@@ -34,7 +34,7 @@ class RVGLWorld(World):
 
     def generate_early(self) -> None:
         """Grant the initial cars, tracks, and cup using this world's seeded random generator."""
-        rookie_cars = tuple(car for car in STOCK_CARS if car.rating == 0)
+        rookie_cars = tuple(car for car in self.get_enabled_cars() if car.rating == 0)
         easy_tracks = tuple(track for track in self.get_enabled_tracks() if track.difficulty == 1)
         bronze_cup = next(cup for cup in STOCK_CUPS if cup.folder == "bronze")
 
@@ -79,11 +79,19 @@ class RVGLWorld(World):
 
     def get_enabled_item_data(self) -> tuple[items.ItemData, ...]:
         """Return the item definitions enabled by this player's item-pool options."""
+        enabled_cars = self.get_enabled_cars()
+        enabled_tracks = self.get_enabled_tracks()
         return tuple(
             item for item in items.ITEM_DATA
-            if (self.options.include_dreamcast_cars or item not in items.DC_CAR_ITEMS)
-            and (self.options.include_dreamcast_track_rooftops or item not in items.DC_TRACK_ITEMS)
+            if (item.source in enabled_cars
+                or item.source in enabled_tracks
+                or item.source in STOCK_CUPS
+                or item == items.FILLER_ITEM)
         )
+
+    def get_enabled_cars(self) -> tuple[CarData, ...]:
+        """Return the cars enabled by this player's item-pool options."""
+        return (*STOCK_CARS, *DC_CARS) if self.options.include_dreamcast_cars else STOCK_CARS
 
     def get_enabled_tracks(self) -> tuple[TrackData, ...]:
         """Return the tracks enabled by this player's item-pool options."""

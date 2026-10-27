@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from Options import DefaultOnToggle, OptionGroup, PerGameCommonOptions, Range, Toggle
+from Options import Choice, DefaultOnToggle, OptionGroup, PerGameCommonOptions, Range, Toggle
 
 
 class StartingCars(Range):
@@ -69,6 +69,20 @@ class IncludeStuntArenaStars(Toggle):
     display_name = "Include Stunt Arena Stars"
 
 
+class Carsanity(Choice):
+    """Include a Single Race win with each enabled car as a location check.
+
+    Disabled: No location checks for winning races with individual cars.
+    Enabled: Each enabled car has a location check for winning a Single Race with it.
+
+    Dreamcast car checks are included only when Include Dreamcast Cars is enabled.
+    """
+    display_name = "Carsanity"
+    option_disabled = 0
+    option_enabled = 1
+    default = option_disabled
+
+
 @dataclass
 class RVGLOptions(PerGameCommonOptions):
     """RVGL-specific options and Archipelago's common settings."""
@@ -82,6 +96,7 @@ class RVGLOptions(PerGameCommonOptions):
     include_reverse_time_trials: IncludeReverseTimeTrials
     include_mirror_time_trials: IncludeMirrorTimeTrials
     include_stunt_arena_stars: IncludeStuntArenaStars
+    carsanity: Carsanity
 
 
 option_groups = [
@@ -94,5 +109,6 @@ option_groups = [
         IncludeReverseTimeTrials,
         IncludeMirrorTimeTrials,
         IncludeStuntArenaStars,
+        Carsanity,
     ]),
 ]

@@ -136,6 +136,7 @@ class TestItemPoolOptions(unittest.TestCase):
                     {location.address for location in world.get_locations() if location.address is not None},
                     {location.id for location in LOCATION_DATA
                      if location not in STUNT_ARENA_LOCATIONS
+                     and not isinstance(location.source, CarData)
                      and (world.options.include_dreamcast_track_rooftops or location.source not in DC_TRACKS)},
                 )
                 self.assertEqual(world.location_name_to_id, catalogue)
@@ -183,6 +184,7 @@ class TestStuntArena(unittest.TestCase):
                         location.address for location in world.get_locations() if location.address is not None
                     }
                     expected_ids = set(catalogue.values())
+                    expected_ids -= {location.id for location in LOCATION_DATA if isinstance(location.source, CarData)}
                     expected_ids -= {location.id for location in LOCATION_DATA if location.source in DC_TRACKS}
                     if player != enabled_player:
                         expected_ids -= stunt_ids

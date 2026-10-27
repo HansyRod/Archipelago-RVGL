@@ -56,7 +56,7 @@ def get_car_item_data(cars: tuple[CarData, ...], set_offset: int) -> tuple[ItemD
         ItemData(
             CAR_ID_OFFSET + set_offset + index * ITEM_ID_STEP,
             get_car_item_name(car),
-            ItemClassification.useful,
+            ItemClassification.progression,
             car
         )
         for index, car in enumerate(cars)
