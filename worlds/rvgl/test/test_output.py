@@ -110,14 +110,16 @@ class TestOutput(unittest.TestCase):
                 config = build_randomizer_config(world)
                 archipelago = config["archipelago"]
                 self.assertEqual(set(archipelago), {
-                    "schemaVersion", "slotNumber", "slotName", "carsanity", "locations", "items", "goalEventKey",
+                    "schemaVersion", "slotNumber", "slotName", "carsanity", "locations", "items", "goal", "goalEventKeys",
                 })
                 self.assertEqual(archipelago["schemaVersion"], 1)
                 self.assertEqual(archipelago["slotNumber"], player)
                 self.assertEqual(archipelago["slotName"], world.player_name)
                 self.assertIs(archipelago["carsanity"], False)
-                self.assertEqual(archipelago["goalEventKey"], "championship_win:4")
-                self.assertIn(archipelago["goalEventKey"], archipelago["locations"])
+                self.assertEqual(archipelago["goal"], "platinum_cup")
+                self.assertEqual(archipelago["goalEventKeys"], ["championship_win:4"])
+                self.assertIn("championship_win:4", archipelago["locations"])
+                self.assertNotIn("goalEventKey", archipelago)
                 self.assertEqual(archipelago["items"][""], FILLER_ITEM.id)
 
                 stunt_locations = {
@@ -260,8 +262,8 @@ class TestOutput(unittest.TestCase):
                 self.assertEqual(set(archipelago["locations"].values()),
                                  {location.address for location in world.get_locations() if location.address is not None})
                 self.assertEqual(archipelago["slotNumber"], player)
-                self.assertEqual(archipelago["goalEventKey"], "championship_win:4")
-                self.assertEqual(world.fill_slot_data(), {"goalEventKey": "championship_win:4"})
+                self.assertEqual(archipelago["goal"], "platinum_cup")
+                self.assertEqual(archipelago["goalEventKeys"], ["championship_win:4"])
                 self.assertNotIn("Victory", archipelago["locations"])
                 race_checks = [key for key in archipelago["locations"] if key.startswith("single_race_win:")]
                 self.assertEqual(len(race_checks), 13 if options[player - 1]["include_single_race_wins"] else 0)
@@ -270,10 +272,50 @@ class TestOutput(unittest.TestCase):
                     if enabled and item.name in starting_names:
                         self.assertIn(f"car_race_win:{item.source.folder}", car_checks)
 
+    def test_goal_metadata_matches_each_players_required_checks(self) -> None:
+        options = [
+            {"goal": goal, "include_dreamcast_cars": cars, "include_dreamcast_track_rooftops": rooftops,
+             "carsanity": carsanity, "include_single_race_wins": goal not in ("tracksanity", "tracksanity_plus"),
+             "include_practice_stars": goal != "tracksanity_plus", "include_normal_time_trials": goal != "tracksanity_plus",
+             "include_stunt_arena_stars": True}
+            for goal, cars, rooftops, carsanity in product(
+                ("platinum_cup", "carsanity", "tracksanity", "tracksanity_plus"),
+                (False, True), (False, True), ("disabled", "enabled"),
+            )
+        ]
+        multiworld = setup_multiworld([RVGLWorld] * len(options), seed=0, options=options)
+        for player, world in multiworld.worlds.items():
+            settings = options[player - 1]
+            with self.subTest(player=player, options=settings):
+                archipelago = json.loads(json.dumps(build_randomizer_config(world)))["archipelago"]
+                if settings["goal"] == "platinum_cup":
+                    expected_keys = ["championship_win:4"]
+                elif settings["goal"] == "carsanity":
+                    cars = (*STOCK_CARS, *DC_CARS) if settings["include_dreamcast_cars"] else STOCK_CARS
+                    expected_keys = [f"car_race_win:{car.folder}" for car in cars]
+                else:
+                    tracks = (*STOCK_TRACKS, *DC_TRACKS) if settings["include_dreamcast_track_rooftops"] else STOCK_TRACKS
+                    event_types = ["single_race_win"]
+                    if settings["goal"] == "tracksanity_plus":
+                        event_types += ["practice_star", "time_trial_normal"]
+                    expected_keys = [f"{event_type}:{track.folder}" for track in tracks for event_type in event_types]
+                expected_goal_data = {"goal": settings["goal"], "goalEventKeys": expected_keys}
+                self.assertEqual({key: archipelago[key] for key in expected_goal_data}, expected_goal_data)
+                self.assertEqual(archipelago["schemaVersion"], 1)
+                self.assertNotIn("goalEventKey", archipelago)
+                self.assertIs(archipelago["carsanity"], settings["carsanity"] == "enabled" or settings["goal"] == "carsanity")
+                active_ids = {location.address for location in world.get_locations() if location.address is not None}
+                for event_key in expected_keys:
+                    location_id = archipelago["locations"][event_key]
+                    self.assertGreater(location_id, 0, event_key)
+                    self.assertIn(location_id, active_ids, event_key)
+                self.assertEqual(world.options.carsanity.current_key, settings["carsanity"])
+
     def test_output_is_reproducible_and_scoped_to_each_player(self) -> None:
         multiworld = setup_multiworld(
-            [RVGLWorld, RVGLWorld], seed=0,
-            options=[{"carsanity": "enabled", "include_dreamcast_cars": True}, {"carsanity": "disabled"}],
+            [RVGLWorld] * 4, seed=0,
+            options=[{"goal": "platinum_cup"}, {"goal": "carsanity", "include_dreamcast_cars": True},
+                     {"goal": "tracksanity", "include_dreamcast_track_rooftops": True}, {"goal": "tracksanity_plus"}],
         )
         multiworld.worlds[1].push_precollected(multiworld.worlds[1].create_item("Silver Cup"))
         profiles = set()
@@ -285,10 +327,12 @@ class TestOutput(unittest.TestCase):
                 contents = path.read_bytes()
                 config = json.loads(contents)
                 self.assertEqual(config, build_randomizer_config(world))
+                self.assertEqual(config["archipelago"]["goal"], world.options.goal.current_key)
+                self.assertEqual(config["archipelago"]["goalEventKeys"], list(world.get_goal_event_keys()))
                 self.assertEqual(config["cups"][1]["obtainCondition"], 13)
                 profiles.add(config["metadata"]["profileName"])
                 world.generate_output(directory)
                 self.assertEqual(path.read_bytes(), contents)
                 self.assertEqual(world.random.getstate(), random_state)
-            self.assertEqual(len(list(Path(directory).glob("*.rvgl.json"))), 2)
-        self.assertEqual(len(profiles), 2)
+            self.assertEqual(len(list(Path(directory).glob("*.rvgl.json"))), len(multiworld.player_ids))
+        self.assertEqual(len(profiles), len(multiworld.player_ids))

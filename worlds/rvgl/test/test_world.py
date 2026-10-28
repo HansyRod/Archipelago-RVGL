@@ -1,6 +1,7 @@
 import unittest
 from collections import Counter
 from itertools import product
+from unittest.mock import patch
 
 from BaseClasses import CollectionState, ItemClassification
 from Fill import distribute_items_restrictive
@@ -29,6 +30,7 @@ from ..locations import (
     STUNT_ARENA_LOCATIONS,
     get_car_race_win_location_name,
 )
+from ..options import Goal, option_groups
 from ..regions import get_car_region_name, get_cup_region_name, get_track_region_name
 from ..stunt_arena import STOCK_STUNT_ARENA_STAR_COUNT
 from ..tracks import DC_TRACKS, STOCK_TRACKS, TrackData
@@ -81,10 +83,266 @@ class TestRVGLWithCarsanity(TestRVGL):
     options = {"carsanity": "enabled"}
 
 
+class TestGoals(unittest.TestCase):
+    def test_goal_choices_and_existing_defaults(self) -> None:
+        world = setup_multiworld(RVGLWorld, steps=(), seed=0).worlds[1]
+        self.assertEqual(Goal.options, {"platinum_cup": 0, "carsanity": 1, "tracksanity": 2, "tracksanity_plus": 3})
+        self.assertEqual(world.options.goal.current_key, "platinum_cup")
+        self.assertTrue(any(Goal in group.options for group in option_groups))
+        self.assertEqual(world.options.carsanity.current_key, "disabled")
+        self.assertTrue(world.options.include_single_race_wins)
+        self.assertFalse(world.is_carsanity_enabled())
+        self.assertTrue(world.is_single_race_wins_enabled())
+        self.assertTrue(world.is_practice_stars_enabled())
+        self.assertTrue(world.is_normal_time_trials_enabled())
+        self.assertEqual(world.get_goal_event_keys(), ("championship_win:4",))
+
+    def test_effective_check_settings_preserve_configured_options(self) -> None:
+        for goal, carsanity, race_wins in product(
+            ("platinum_cup", "carsanity", "tracksanity", "tracksanity_plus"), ("disabled", "enabled"), (False, True),
+        ):
+            with self.subTest(goal=goal, carsanity=carsanity, race_wins=race_wins):
+                world = setup_multiworld(RVGLWorld, steps=(), seed=0, options={
+                    "goal": goal, "carsanity": carsanity, "include_single_race_wins": race_wins,
+                }).worlds[1]
+                self.assertIs(world.is_carsanity_enabled(), carsanity == "enabled" or goal == "carsanity")
+                self.assertIs(world.is_single_race_wins_enabled(), race_wins or goal in ("tracksanity", "tracksanity_plus"))
+                self.assertEqual(world.options.carsanity.current_key, carsanity)
+                self.assertEqual(bool(world.options.include_single_race_wins), race_wins)
+                self.assertEqual(world.options.goal.current_key, goal)
+
+    def test_effective_practice_and_normal_time_trial_settings_preserve_configured_options(self) -> None:
+        for goal, practice_stars, normal_trials in product(
+            ("platinum_cup", "carsanity", "tracksanity", "tracksanity_plus"), (False, True), (False, True),
+        ):
+            with self.subTest(goal=goal, practice_stars=practice_stars, normal_trials=normal_trials):
+                world = setup_multiworld(RVGLWorld, steps=(), seed=0, options={
+                    "goal": goal, "include_practice_stars": practice_stars, "include_normal_time_trials": normal_trials,
+                }).worlds[1]
+                self.assertIs(world.is_practice_stars_enabled(), practice_stars or goal == "tracksanity_plus")
+                self.assertIs(world.is_normal_time_trials_enabled(), normal_trials or goal == "tracksanity_plus")
+                self.assertEqual(bool(world.options.include_practice_stars), practice_stars)
+                self.assertEqual(bool(world.options.include_normal_time_trials), normal_trials)
+
+    def test_goal_requirements_match_each_players_enabled_content(self) -> None:
+        options = [
+            {"goal": goal, "include_dreamcast_cars": cars, "include_dreamcast_track_rooftops": rooftops,
+             "carsanity": "disabled", "include_single_race_wins": False, "include_practice_stars": False,
+             "include_normal_time_trials": False, "include_stunt_arena_stars": True}
+            for goal, cars, rooftops in product(
+                ("platinum_cup", "carsanity", "tracksanity", "tracksanity_plus"), (False, True), (False, True),
+            )
+        ]
+        catalogue = {location.event_key: location for location in LOCATION_DATA}
+        multiworld = setup_multiworld([RVGLWorld] * len(options), steps=(), seed=0, options=options)
+        for player, world in multiworld.worlds.items():
+            settings = options[player - 1]
+            with self.subTest(player=player, options=settings):
+                if settings["goal"] == "carsanity":
+                    cars = (*STOCK_CARS, *DC_CARS) if settings["include_dreamcast_cars"] else STOCK_CARS
+                    expected_keys = tuple(f"car_race_win:{car.folder}" for car in cars)
+                    expected_count = 42 if settings["include_dreamcast_cars"] else 28
+                elif settings["goal"] in ("tracksanity", "tracksanity_plus"):
+                    tracks = (*STOCK_TRACKS, *DC_TRACKS) if settings["include_dreamcast_track_rooftops"] else STOCK_TRACKS
+                    if settings["goal"] == "tracksanity_plus":
+                        event_types = ("single_race_win", "practice_star", "time_trial_normal")
+                        expected_count = 42 if settings["include_dreamcast_track_rooftops"] else 39
+                    else:
+                        event_types = ("single_race_win",)
+                        expected_count = 14 if settings["include_dreamcast_track_rooftops"] else 13
+                    expected_keys = tuple(f"{event_type}:{track.folder}" for track in tracks for event_type in event_types)
+                else:
+                    expected_keys = ("championship_win:4",)
+                    expected_count = 1
+                self.assertEqual(world.get_goal_event_keys(), expected_keys)
+                self.assertEqual(len(expected_keys), expected_count)
+                self.assertEqual(len(set(expected_keys)), expected_count)
+                self.assertEqual(world.get_goal_location_data(), tuple(catalogue[key] for key in expected_keys))
+                for location in world.get_goal_location_data():
+                    self.assertIs(location, catalogue[location.event_key])
+                    self.assertEqual(world.location_name_to_id[location.name], location.id)
+                    self.assertEqual(EVENT_KEY_TO_LOCATION_ID[location.event_key], location.id)
+
+    def test_starting_inventory_and_seed_do_not_remove_or_reorder_goal_checks(self) -> None:
+        for goal, starting_cars, starting_tracks in product(
+            ("carsanity", "tracksanity", "tracksanity_plus"), (1, 3, 8), (0, 1, 4),
+        ):
+            with self.subTest(goal=goal, starting_cars=starting_cars, starting_tracks=starting_tracks):
+                expected_sources = STOCK_CARS if goal == "carsanity" else STOCK_TRACKS
+                if goal == "tracksanity_plus":
+                    expected_sources = tuple(track for track in STOCK_TRACKS for _ in range(3))
+                for seed in (0, 1):
+                    multiworld = setup_multiworld(RVGLWorld, steps=("generate_early",), seed=seed, options={
+                        "goal": goal, "starting_cars": starting_cars, "starting_tracks": starting_tracks,
+                    })
+                    world = multiworld.worlds[1]
+                    requirements = world.get_goal_location_data()
+                    self.assertEqual(tuple(location.source for location in requirements), expected_sources)
+                    self.assertEqual(len(multiworld.precollected_items[1]), starting_cars + starting_tracks + 1)
+
+
+class TestGoalRules(unittest.TestCase):
+    def _goal_item_names(self, world: RVGLWorld) -> tuple[str, ...]:
+        """Return goal items needed in addition to the guaranteed starting RC Bandit."""
+        if world.options.goal == "platinum_cup":
+            return ("Platinum Cup",)
+        if world.options.goal == "carsanity":
+            return (*(get_car_item_name(car) for car in world.get_enabled_cars() if car != STOCK_CARS[0]),
+                    "Track: Toys in the Hood 1")
+        return tuple(get_track_item_name(track) for track in world.get_enabled_tracks())
+
+    def _state_with_items(self, world: RVGLWorld, item_names: tuple[str, ...]) -> CollectionState:
+        state = CollectionState(world.multiworld)
+        state.collect(world.create_item("Car: RC Bandit"), prevent_sweep=True)
+        for item_name in item_names:
+            state.collect(world.create_item(item_name), prevent_sweep=True)
+        return state
+
+    def test_goals_include_their_checks_when_location_options_are_disabled(self) -> None:
+        disabled_options = {
+            "carsanity": "disabled", "include_single_race_wins": False, "include_practice_stars": False,
+            "include_normal_time_trials": False, "include_reverse_time_trials": False,
+            "include_mirror_time_trials": False,
+        }
+        for goal, cars, rooftops in product(
+            ("platinum_cup", "carsanity", "tracksanity", "tracksanity_plus"), (False, True), (False, True),
+        ):
+            with self.subTest(goal=goal, cars=cars, rooftops=rooftops):
+                world = setup_multiworld(RVGLWorld, steps=("create_regions", "set_rules"), seed=0, options={
+                    **disabled_options, "goal": goal, "include_dreamcast_cars": cars,
+                    "include_dreamcast_track_rooftops": rooftops,
+                }).worlds[1]
+                required_ids = {location.id for location in world.get_goal_location_data()}
+                cup_ids = {location.id for location in LOCATION_DATA if isinstance(location.source, CupData)}
+                active_ids = {location.address for location in world.get_locations() if location.address is not None}
+                self.assertEqual(active_ids, required_ids | cup_ids)
+                self.assertEqual(
+                    sum(region.name.startswith("Car: ") for region in world.get_regions()),
+                    len(world.get_enabled_cars()) if goal == "carsanity" else 0,
+                )
+                for option_name, configured_value in disabled_options.items():
+                    expected = "disabled" if option_name == "carsanity" else configured_value
+                    actual = getattr(world.options, option_name)
+                    self.assertEqual(actual.current_key if option_name == "carsanity" else bool(actual), expected)
+                victory = world.get_location("Victory")
+                self.assertEqual(victory.parent_region.name, "Menu")
+                self.assertIsNone(victory.address)
+                self.assertIsNone(victory.item.code)
+
+    def test_goal_requires_each_needed_item_and_accepts_the_last_missing_item(self) -> None:
+        for goal, dreamcast in product(("platinum_cup", "carsanity", "tracksanity", "tracksanity_plus"), (False, True)):
+            world = setup_multiworld(RVGLWorld, steps=("create_regions", "set_rules"), seed=0, options={
+                "goal": goal, "include_dreamcast_cars": dreamcast, "include_dreamcast_track_rooftops": dreamcast,
+            }).worlds[1]
+            item_names = self._goal_item_names(world)
+            for missing_item in item_names:
+                with self.subTest(goal=goal, dreamcast=dreamcast, missing_item=missing_item):
+                    state = self._state_with_items(world, tuple(name for name in item_names if name != missing_item))
+                    self.assertFalse(world.get_location("Victory").can_reach(state))
+                    state.sweep_for_advancements()
+                    self.assertFalse(world.multiworld.completion_condition[world.player](state))
+                    state.collect(world.create_item(missing_item), prevent_sweep=True)
+                    self.assertTrue(world.get_location("Victory").can_reach(state))
+                    state.sweep_for_advancements()
+                    self.assertTrue(world.multiworld.completion_condition[world.player](state))
+
+    def test_victory_requires_every_goal_location_including_each_plus_check_type(self) -> None:
+        for goal in ("platinum_cup", "carsanity", "tracksanity", "tracksanity_plus"):
+            world = setup_multiworld(RVGLWorld, steps=("create_regions", "set_rules"), seed=0, options={
+                "goal": goal, "include_dreamcast_cars": True, "include_dreamcast_track_rooftops": True,
+            }).worlds[1]
+            for requirement in world.get_goal_location_data():
+                with self.subTest(goal=goal, blocked_location=requirement.name):
+                    state = self._state_with_items(world, self._goal_item_names(world))
+                    with patch.object(world.get_location(requirement.name), "access_rule", return_value=False):
+                        self.assertFalse(world.get_location("Victory").can_reach(state))
+                        state.sweep_for_advancements()
+                        self.assertFalse(world.multiworld.completion_condition[world.player](state))
+
+    def test_optional_checks_and_cups_do_not_gate_other_goals(self) -> None:
+        for goal in ("platinum_cup", "carsanity", "tracksanity", "tracksanity_plus"):
+            with self.subTest(goal=goal):
+                world = setup_multiworld(RVGLWorld, steps=("create_regions", "set_rules"), seed=0, options={
+                    "goal": goal, "carsanity": "enabled", "include_stunt_arena_stars": True,
+                }).worlds[1]
+                state = self._state_with_items(world, self._goal_item_names(world))
+                self.assertTrue(world.get_location("Victory").can_reach(state))
+                state.sweep_for_advancements()
+                self.assertTrue(world.multiworld.completion_condition[world.player](state))
+
+    def test_mixed_goals_generate_and_fill_with_independent_content_and_starting_items(self) -> None:
+        options = [
+            {"goal": goal, "include_dreamcast_cars": cars, "include_dreamcast_track_rooftops": rooftops,
+             "carsanity": "disabled", "include_single_race_wins": False,
+             "starting_cars": 1 if cars else 3, "starting_tracks": 4 if cars else 0}
+            for goal, cars, rooftops in product(
+                ("platinum_cup", "carsanity", "tracksanity", "tracksanity_plus"), (False, True), (False, True),
+            )
+        ]
+        catalogue = dict(RVGLWorld.location_name_to_id)
+        for player_options in (options, list(reversed(options))):
+            multiworld = setup_multiworld([RVGLWorld] * len(player_options), seed=0, options=player_options)
+            for player, world in multiworld.worlds.items():
+                with self.subTest(player=player, options=player_options[player - 1]):
+                    self.assertEqual(world.options.goal.current_key, player_options[player - 1]["goal"])
+                    pool = [item for item in multiworld.itempool if item.player == player]
+                    self.assertEqual(len(pool), len(multiworld.get_unfilled_locations(player)))
+                    self.assertTrue(all(world.get_location(location.name).address == location.id
+                                        for location in world.get_goal_location_data()))
+            distribute_items_restrictive(multiworld)
+            call_all(multiworld, "post_fill")
+            call_all(multiworld, "finalize_multiworld")
+            self.assertFalse(multiworld.get_unfilled_locations())
+            self.assertTrue(multiworld.can_beat_game())
+            self.assertTrue(multiworld.fulfills_accessibility())
+            self.assertEqual(RVGLWorld.location_name_to_id, catalogue)
+
+
 class TestStartingCars(unittest.TestCase):
+    def test_zero_starting_cars_raises_option_error(self) -> None:
+        for goal, starting_inventory in product(
+            ("platinum_cup", "carsanity", "tracksanity", "tracksanity_plus"),
+            ({}, {"Car: RC Bandit": 0}, {"Track: Toys in the Hood 1": 1}, {"Car: BigVolt": 1}),
+        ):
+            with self.subTest(goal=goal, start_inventory=starting_inventory):
+                with self.assertRaisesRegex(OptionError, "at least one starting car.*starting_cars"):
+                    setup_multiworld(RVGLWorld, seed=0, options={
+                        "goal": goal, "starting_cars": 0, "start_inventory": starting_inventory,
+                    })
+        with self.assertRaisesRegex(OptionError, r"RVGL player 2 \(Tester2\).*at least one starting car"):
+            setup_multiworld([RVGLWorld, RVGLWorld], seed=0, options=[{}, {"starting_cars": 0}])
+
+    def test_zero_random_starting_cars_accepts_enabled_start_inventory_cars(self) -> None:
+        for goal, (car_name, dreamcast) in product(
+            ("platinum_cup", "carsanity", "tracksanity", "tracksanity_plus"),
+            (("Car: RC Bandit", False), ("Car: Toyeca", False), ("Car: BigVolt", True)),
+        ):
+            with self.subTest(goal=goal, car=car_name, dreamcast=dreamcast):
+                multiworld = setup_multiworld(RVGLWorld, steps=("generate_early", "create_regions"), seed=0, options={
+                    "goal": goal, "starting_cars": 0, "start_inventory": {car_name: 1},
+                    "include_dreamcast_cars": dreamcast,
+                })
+                world = multiworld.worlds[1]
+                # Match Main.py: apply the common start_inventory after generate_early.
+                for item_name, count in world.options.start_inventory.value.items():
+                    for _ in range(count):
+                        world.push_precollected(world.create_item(item_name))
+                world.create_items()
+                world.set_rules()
+                self.assertEqual(
+                    [item.name for item in multiworld.precollected_items[1] if item.name.startswith("Car: ")],
+                    [car_name],
+                )
+                self.assertNotIn(car_name, [item.name for item in multiworld.itempool])
+                self.assertEqual(len(multiworld.itempool), len(multiworld.get_unfilled_locations(1)))
+                distribute_items_restrictive(multiworld)
+                self.assertFalse(multiworld.get_unfilled_locations())
+                self.assertTrue(multiworld.can_beat_game())
+                self.assertTrue(multiworld.fulfills_accessibility())
+
     def test_starting_car_counts_and_item_pool(self) -> None:
         rookie_names = {f"Car: {car.display_name}" for car in STOCK_CARS if car.rating == 0}
-        for count in range(9):
+        for count in range(1, 9):
             with self.subTest(starting_cars=count):
                 multiworld = setup_multiworld(RVGLWorld, seed=0, options={"starting_cars": count})
                 starting_items = multiworld.precollected_items[1]
@@ -336,6 +594,7 @@ class TestRegionAccess(unittest.TestCase):
 
         empty_state = CollectionState(multiworld)
         for player in multiworld.player_ids:
+            empty_state.collect(multiworld.worlds[player].create_item("Car: RC Bandit"), prevent_sweep=True)
             self.assertTrue(multiworld.get_region("Menu", player).can_reach(empty_state))
             for region_name, _ in requirements:
                 with self.subTest(player=player, region=region_name, inventory="empty"):
@@ -343,7 +602,7 @@ class TestRegionAccess(unittest.TestCase):
 
         for recipient in multiworld.player_ids:
             for unlocked_region, item_name in requirements:
-                state = CollectionState(multiworld)
+                state = empty_state.copy()
                 state.collect(multiworld.worlds[recipient].create_item(item_name), prevent_sweep=True)
 
                 for player in multiworld.player_ids:
@@ -390,7 +649,7 @@ class TestCarsanity(unittest.TestCase):
                     self.assertEqual(world.create_item(item.name).classification, ItemClassification.progression)
 
     def test_starting_cars_retain_their_win_checks(self) -> None:
-        for dreamcast, starting_cars in product((False, True), (0, 3, 8)):
+        for dreamcast, starting_cars in product((False, True), (1, 3, 8)):
             with self.subTest(dreamcast=dreamcast, starting_cars=starting_cars):
                 multiworld = setup_multiworld(RVGLWorld, seed=0, options={
                     "carsanity": "enabled", "include_dreamcast_cars": dreamcast,
@@ -524,7 +783,7 @@ class TestCarsanity(unittest.TestCase):
         self.assertTrue(multiworld.can_beat_game())
         self.assertTrue(multiworld.fulfills_accessibility())
 
-    def test_platinum_cup_remains_the_only_goal(self) -> None:
+    def test_carsanity_checks_do_not_change_default_platinum_goal(self) -> None:
         multiworld = setup_multiworld(RVGLWorld, steps=("create_regions", "set_rules"), seed=0,
                                      options={"carsanity": "enabled"})
         world = multiworld.worlds[1]
@@ -537,6 +796,7 @@ class TestCarsanity(unittest.TestCase):
         self.assertFalse(multiworld.completion_condition[1](state))
 
         state = CollectionState(multiworld)
+        state.collect(world.create_item("Car: RC Bandit"))
         state.collect(world.create_item("Platinum Cup"))
         state.sweep_for_advancements()
         self.assertTrue(multiworld.completion_condition[1](state))

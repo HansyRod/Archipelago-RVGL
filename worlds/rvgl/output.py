@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 from .cars import DC_CARS, STOCK_CARS, CarData
 from .cups import STOCK_CUPS, CupData
 from .items import ITEM_DATA, SourceData, get_archipelago_item_name
-from .locations import EVENT_KEY_TO_LOCATION_ID, get_championship_event_key
+from .locations import EVENT_KEY_TO_LOCATION_ID
 from .tracks import DC_TRACKS, STOCK_TRACKS, TrackData
 
 if TYPE_CHECKING:
@@ -127,14 +127,15 @@ def _build_archipelago_config(world: RVGLWorld) -> dict[str, Any]:
         "schemaVersion": ARCHIPELAGO_SCHEMA_VERSION,
         "slotNumber": world.player,
         "slotName": world.player_name,
-        "carsanity": bool(world.options.carsanity),
+        "carsanity": world.is_carsanity_enabled(),
         "locations": {
             event_key: location_id
             for event_key, location_id in EVENT_KEY_TO_LOCATION_ID.items()
             if location_id in active_location_ids
         },
         "items": {get_archipelago_item_name(item.source): item.id for item in ITEM_DATA},
-        "goalEventKey": get_championship_event_key(world.goal_cup),
+        "goal": world.options.goal.current_key,
+        "goalEventKeys": list(world.get_goal_event_keys()),
     }
 
 

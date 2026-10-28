@@ -3,10 +3,31 @@ from dataclasses import dataclass
 from Options import Choice, DefaultOnToggle, OptionGroup, PerGameCommonOptions, Range, Toggle
 
 
+class Goal(Choice):
+    """Choose the victory goal. Every check required by the selected goal must be completed.
+
+    Platinum Cup: Win Platinum Cup.
+    Carsanity: Win a Single Race with every enabled car. Always enables Carsanity checks.
+    Tracksanity: Win a Single Race on every enabled track. Always enables Single Race win checks.
+    Tracksanity Plus: Win a Single Race, find the Practice star, and beat the Normal
+    Time Trial on every enabled track. Always enables all three check categories.
+
+    Starting cars and tracks still require wins. Dreamcast cars and Rooftops are
+    required only when their respective content options are enabled.
+    """
+    display_name = "Goal"
+    option_platinum_cup = 0
+    option_carsanity = 1
+    option_tracksanity = 2
+    option_tracksanity_plus = 3
+    default = option_platinum_cup
+
+
 class StartingCars(Range):
     """Number of Rookie cars randomly granted at the start.
 
     To have specific starting cars, use the start_inventory option and set this to 0.
+    You must have at least one starting car across this option and the start_inventory.
     """
     display_name = "Starting Cars"
     range_start = 0
@@ -37,6 +58,7 @@ class IncludeDreamcastTrackRooftops(Toggle):
 
 class IncludeSingleRaceWins(DefaultOnToggle):
     """Include Single Race wins on each track as location checks.
+    If Tracksanity or Tracksanity Plus is chosen as the goal, this setting is forced to True.
 
     Removing too many locations from the location pool can cause generation to fail
     if the world has more required items than available locations.
@@ -45,12 +67,16 @@ class IncludeSingleRaceWins(DefaultOnToggle):
 
 
 class IncludePracticeStars(DefaultOnToggle):
-    """Include Practice stars on each track as location checks."""
+    """Include Practice stars on each track as location checks.
+    If Tracksanity Plus is chosen as the goal, this setting is forced to True.
+    """
     display_name = "Include Practice Stars"
 
 
 class IncludeNormalTimeTrials(DefaultOnToggle):
-    """Include Normal Time Trial records on each track as location checks."""
+    """Include Normal Time Trial records on each track as location checks.
+    If Tracksanity Plus is chosen as the goal, this setting is forced to True.
+    """
     display_name = "Include Normal Time Trials"
 
 
@@ -71,6 +97,7 @@ class IncludeStuntArenaStars(Toggle):
 
 class Carsanity(Choice):
     """Include a Single Race win with each enabled car as a location check.
+    If Carsanity is chosen as the goal, this setting is forced to Enabled.
 
     Disabled: No location checks for winning races with individual cars.
     Enabled: Each enabled car has a location check for winning a Single Race with it.
@@ -86,6 +113,7 @@ class Carsanity(Choice):
 @dataclass
 class RVGLOptions(PerGameCommonOptions):
     """RVGL-specific options and Archipelago's common settings."""
+    goal: Goal
     starting_cars: StartingCars
     starting_tracks: StartingTracks
     include_dreamcast_cars: IncludeDreamcastCars
@@ -100,6 +128,7 @@ class RVGLOptions(PerGameCommonOptions):
 
 
 option_groups = [
+    OptionGroup("Goal Options", [Goal]),
     OptionGroup("Starting Content Options", [StartingCars, StartingTracks]),
     OptionGroup("Item Pool Options", [IncludeDreamcastCars, IncludeDreamcastTrackRooftops]),
     OptionGroup("Location Pool Options", [

@@ -31,11 +31,12 @@ def create_regions(world: RVGLWorld) -> None:
     """Create the starting region and a connected region for each stock track and cup.
     Create a region for Stunt Arena stars only if it's included.
     Create regions for enabled cars only when Carsanity is enabled.
+    Goals can enable their required check categories independently of location options.
     """
     menu = Region("Menu", world.player, world.multiworld)
     world.multiworld.regions.append(menu)
 
-    if world.options.carsanity:
+    if world.is_carsanity_enabled():
         for car in world.get_enabled_cars():
             _create_content_region(world, menu, get_car_region_name(car), car)
 
@@ -48,7 +49,7 @@ def create_regions(world: RVGLWorld) -> None:
     if world.options.include_stunt_arena_stars:
         _create_content_region(world, menu, STOCK_STUNT_ARENA.display_name, STOCK_STUNT_ARENA)
 
-    goal_region = world.get_region(get_cup_region_name(world.goal_cup))
+    goal_region = menu
     goal_region.add_event("Victory", location_type=RVGLLocation, item_type=RVGLItem)
 
 
@@ -62,10 +63,10 @@ def _create_content_region(
     world.multiworld.regions.append(region)
 
     enabled_location_types = {
-        "car_race_win": world.options.carsanity,
-        "single_race_win": world.options.include_single_race_wins,
-        "practice_star": world.options.include_practice_stars,
-        "time_trial_normal": world.options.include_normal_time_trials,
+        "car_race_win": world.is_carsanity_enabled(),
+        "single_race_win": world.is_single_race_wins_enabled(),
+        "practice_star": world.is_practice_stars_enabled(),
+        "time_trial_normal": world.is_normal_time_trials_enabled(),
         "time_trial_reverse": world.options.include_reverse_time_trials,
         "time_trial_mirror": world.options.include_mirror_time_trials,
         "championship_win": True,
