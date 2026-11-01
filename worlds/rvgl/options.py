@@ -10,10 +10,7 @@ class Goal(Choice):
     Carsanity: Win a Single Race with every enabled car. Always enables Carsanity checks.
     Tracksanity: Win a Single Race on every enabled track. Always enables Single Race win checks.
     Tracksanity Plus: Win a Single Race, find the Practice star, and beat the Normal
-    Time Trial on every enabled track. Always enables all three check categories.
-
-    Starting cars and tracks still require wins. Dreamcast cars and Rooftops are
-    required only when their respective content options are enabled.
+        Time Trial on every enabled track. Always enables all three check categories.
     """
     display_name = "Goal"
     option_platinum_cup = 0
@@ -23,11 +20,37 @@ class Goal(Choice):
     default = option_platinum_cup
 
 
+class LogicDifficulty(Choice):
+    """Determines which checks are considered in logic relative to the cars obtained.
+    This is used for Championship, Time Trial, Practice and Stunt Arena checks.
+    The exact requirements for each difficulty depend on the check type, but in general:
+
+    Casual: Requires a car of a superior rating to make the check in logic.
+        Example: Bronze Cup requires at least an Amateur car to be in logic.
+
+    Standard: Requires a car of the same rating to make the check in logic.
+        Example: Silver Cup requires at least an Amateur car to be in logic.
+
+    Expert: Requires a car of a rating below to make the check in logic.
+        Example: Gold Cup requires at least an Amateur car to be in logic.
+
+    Additional effects of logic difficulty:
+    - Casual logic does not allow Phat Slug to be the only starting car.
+    - Pest Control, Rotor and RV Loco are only considered in logic on Expert difficulty.
+    """
+    display_name = "Logic Difficulty"
+    option_casual = 0
+    option_standard = 1
+    option_expert = 2
+    default = option_standard
+
+
 class StartingCars(Range):
     """Number of Rookie cars randomly granted at the start.
 
     To have specific starting cars, use the start_inventory option and set this to 0.
     You must have at least one starting car across this option and the start_inventory.
+    If using Casual logic, Phat Slug cannot be your only starting car.
     """
     display_name = "Starting Cars"
     range_start = 0
@@ -114,6 +137,7 @@ class Carsanity(Choice):
 class RVGLOptions(PerGameCommonOptions):
     """RVGL-specific options and Archipelago's common settings."""
     goal: Goal
+    logic_difficulty: LogicDifficulty
     starting_cars: StartingCars
     starting_tracks: StartingTracks
     include_dreamcast_cars: IncludeDreamcastCars
@@ -129,6 +153,7 @@ class RVGLOptions(PerGameCommonOptions):
 
 option_groups = [
     OptionGroup("Goal Options", [Goal]),
+    OptionGroup("Logic Options", [LogicDifficulty]),
     OptionGroup("Starting Content Options", [StartingCars, StartingTracks]),
     OptionGroup("Item Pool Options", [IncludeDreamcastCars, IncludeDreamcastTrackRooftops]),
     OptionGroup("Location Pool Options", [

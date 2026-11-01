@@ -189,7 +189,10 @@ class TestGoalRules(unittest.TestCase):
         if world.options.goal == "carsanity":
             return (*(get_car_item_name(car) for car in world.get_enabled_cars() if car != STOCK_CARS[0]),
                     "Track: Toys in the Hood 1")
-        return tuple(get_track_item_name(track) for track in world.get_enabled_tracks())
+        track_items = tuple(get_track_item_name(track) for track in world.get_enabled_tracks())
+        if world.options.goal == "tracksanity_plus":
+            return (*track_items, "Car: Toyeca")
+        return track_items
 
     def _state_with_items(self, world: RVGLWorld, item_names: tuple[str, ...]) -> CollectionState:
         state = CollectionState(world.multiworld)
@@ -595,6 +598,8 @@ class TestRegionAccess(unittest.TestCase):
         empty_state = CollectionState(multiworld)
         for player in multiworld.player_ids:
             empty_state.collect(multiworld.worlds[player].create_item("Car: RC Bandit"), prevent_sweep=True)
+            # Satisfy the independent Practice-star car rules while isolating track ownership.
+            empty_state.collect(multiworld.worlds[player].create_item("Car: Toyeca"), prevent_sweep=True)
             self.assertTrue(multiworld.get_region("Menu", player).can_reach(empty_state))
             for region_name, _ in requirements:
                 with self.subTest(player=player, region=region_name, inventory="empty"):

@@ -6,6 +6,8 @@ from rule_builder.rules import And, CanReachLocation, Has, HasAny
 
 from .cups import STOCK_CUPS
 from .items import get_car_item_name, get_cup_item_name, get_track_item_name
+from .locations import get_practice_star_location_name
+from .logic import PRACTICE_STAR_MIN_DIFFICULTY
 from .regions import get_car_region_name, get_cup_region_name, get_track_region_name
 
 if TYPE_CHECKING:
@@ -21,10 +23,8 @@ def set_rules(world: RVGLWorld) -> None:
     Generation guarantees a starting car, so track and cup access does not need
     an additional car requirement.
 
-    Currently Archipelago's generation logic assumes the player can complete an activity
-    once it is available; it does not simulate driving skill or record race results.
-    The internal Victory event becomes available when every activity required by
-    the selected goal is reachable. Actual gameplay completions come from the client.
+    Car logic has been added to Practice star locations to guarantee the player
+    has a suitable car capable of obtaining the track's star, according to the selected logic difficulty.
     """
     if world.is_carsanity_enabled():
         # Track ownership is required even when per-track Single Race checks are disabled.
@@ -36,6 +36,18 @@ def set_rules(world: RVGLWorld) -> None:
     for track in world.get_enabled_tracks():
         entrance = world.get_entrance(f"Menu to {get_track_region_name(track)}")
         world.set_rule(entrance, Has(get_track_item_name(track)))
+
+        if world.is_practice_stars_enabled() and track.folder in PRACTICE_STAR_MIN_DIFFICULTY:
+            requirements = PRACTICE_STAR_MIN_DIFFICULTY[track.folder]
+            enabled_cars = world.get_enabled_cars()
+            eligible_car_items = [
+                get_car_item_name(car) for car in enabled_cars
+                if requirements[car.folder] is not None
+                and requirements[car.folder] <= world.options.logic_difficulty.value
+            ]
+            world.set_rule(
+                world.get_location(get_practice_star_location_name(track)), HasAny(*eligible_car_items),
+            )
 
     for cup in STOCK_CUPS:
         entrance = world.get_entrance(f"Menu to {get_cup_region_name(cup)}")
