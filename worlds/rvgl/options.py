@@ -35,7 +35,8 @@ class LogicDifficulty(Choice):
         Example: Gold Cup requires at least an Amateur car to be in logic.
 
     Additional effects of logic difficulty:
-    - Casual logic does not allow Phat Slug to be the only starting car.
+    - Casual logic grants one of the following starting cars:
+    RC Bandit, Col. Moss, Dr. Grudge, Sprinter XL, or BigVolt (if DC cars are enabled).
     - Pest Control, Rotor and RV Loco are only considered in logic on Expert difficulty.
     """
     display_name = "Logic Difficulty"
@@ -50,7 +51,8 @@ class StartingCars(Range):
 
     To have specific starting cars, use the start_inventory option and set this to 0.
     You must have at least one starting car across this option and the start_inventory.
-    If using Casual logic, Phat Slug cannot be your only starting car.
+    If using Casual logic, at least one of the following cars will be granted (regardless of this option's value):
+    RC Bandit, Col. Moss, Dr. Grudge, Sprinter XL, or BigVolt (if DC cars are enabled).
     """
     display_name = "Starting Cars"
     range_start = 0

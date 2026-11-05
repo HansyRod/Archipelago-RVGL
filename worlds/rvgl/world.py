@@ -45,32 +45,31 @@ class RVGLWorld(World):
             self.options.start_inventory.value.get(items.get_car_item_name(car), 0)
             for car in self.get_enabled_cars()
         )
-        if starting_car_count == 0:
+        if starting_car_count == 0 and self.options.logic_difficulty != LogicDifficulty.option_casual:
             raise OptionError(
                 f"RVGL player {self.player} ({self.player_name}) must have at least one starting car. "
                 "Increase starting_cars or add an enabled car to start_inventory."
             )
         rookie_cars = tuple(car for car in self.get_enabled_cars() if car.rating == 0)
+        starting_cars = []
         if self.options.logic_difficulty == LogicDifficulty.option_casual:
+            casual_cars = tuple(car for car in rookie_cars if car.folder in ("rc", "moss", "beatall", "tc6", "bigvolt"))
             has_other_starting_car = any(
-                car.folder != "phat" and self.options.start_inventory.value.get(items.get_car_item_name(car), 0) > 0
-                for car in self.get_enabled_cars()
+                self.options.start_inventory.value.get(items.get_car_item_name(car), 0) > 0
+                for car in casual_cars
             )
             if not has_other_starting_car:
-                if self.options.starting_cars.value == 0:
-                    raise OptionError(
-                        f"RVGL player {self.player} ({self.player_name}): Casual logic requires a starting car "
-                        "other than Phat Slug. Increase starting_cars or add another enabled car to start_inventory."
-                    )
-                if self.options.starting_cars.value == 1:
-                    # Two or more distinct random starters already guarantee a non-Phat car.
-                    rookie_cars = tuple(car for car in rookie_cars if car.folder != "phat")
+                # Choose a qualifying car first when start_inventory does not provide one.
+                starting_cars.append(self.random.choice(casual_cars))
+        rookie_cars = tuple(car for car in rookie_cars if car not in starting_cars)
+        starting_cars.extend(self.random.sample(
+            rookie_cars, max(0, self.options.starting_cars.value - len(starting_cars)),
+        ))
         easy_tracks = tuple(track for track in self.get_enabled_tracks() if track.difficulty == 1)
         bronze_cup = next(cup for cup in STOCK_CUPS if cup.folder == "bronze")
 
         starting_item_names = [
-            *(items.get_car_item_name(car)
-              for car in self.random.sample(rookie_cars, self.options.starting_cars.value)),
+            *(items.get_car_item_name(car) for car in starting_cars),
             *(items.get_track_item_name(track)
               for track in self.random.sample(easy_tracks, self.options.starting_tracks.value)),
             items.get_cup_item_name(bronze_cup),

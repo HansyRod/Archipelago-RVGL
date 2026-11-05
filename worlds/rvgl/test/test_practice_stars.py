@@ -3,7 +3,6 @@ from itertools import product
 
 from BaseClasses import CollectionState
 from Fill import distribute_items_restrictive
-from Options import OptionError
 from test.general import setup_multiworld
 from worlds.AutoWorld import call_all
 
@@ -173,32 +172,72 @@ class TestPracticeStarRules(unittest.TestCase):
 
 
 class TestCasualStartingCars(unittest.TestCase):
-    def test_random_starters_guarantee_a_non_phat_car_without_reducing_counts(self) -> None:
-        for seed, count, dreamcast in product(range(24), (1, 2, 8), (False, True)):
+    casual_car_names = {"Car: RC Bandit", "Car: Col. Moss", "Car: Dr. Grudge", "Car: Sprinter XL"}
+
+    def test_random_starters_guarantee_a_qualifying_car_without_reducing_counts(self) -> None:
+        selected_cars = {False: set(), True: set()}
+        for seed, count, dreamcast in product(range(24), range(9), (False, True)):
             with self.subTest(seed=seed, count=count, dreamcast=dreamcast):
                 multiworld = setup_multiworld(RVGLWorld, steps=("generate_early",), seed=seed, options={
                     "logic_difficulty": "casual", "starting_cars": count, "include_dreamcast_cars": dreamcast,
                 })
                 starters = {item.name for item in multiworld.precollected_items[1] if item.name.startswith("Car: ")}
-                self.assertEqual(len(starters), count)
-                self.assertTrue(starters - {"Car: Phat Slug"})
+                self.assertEqual(len(starters), max(1, count))
+                self.assertEqual(sum(item.name.startswith("Car: ") for item in multiworld.precollected_items[1]),
+                                 len(starters))
+                self.assertTrue(starters & (self.casual_car_names | ({"Car: BigVolt"} if dreamcast else set())))
+                self.assertIn(multiworld.precollected_items[1][0].name,
+                              self.casual_car_names | ({"Car: BigVolt"} if dreamcast else set()))
+                self.assertTrue(starters <= {get_car_item_name(car)
+                                             for car in multiworld.worlds[1].get_enabled_cars() if car.rating == 0})
+                self.assertEqual(multiworld.worlds[1].options.starting_cars.value, count)
+                if count == 1:
+                    selected_cars[dreamcast].update(starters)
+        self.assertEqual(selected_cars[False], self.casual_car_names)
+        self.assertEqual(selected_cars[True], self.casual_car_names | {"Car: BigVolt"})
 
-    def test_phat_only_explicit_starts_require_standard_or_expert(self) -> None:
-        for inventory in ({"Car: Phat Slug": 1}, {"Car: Phat Slug": 2},
+    def test_unsuitable_explicit_starts_receive_a_qualifying_casual_car(self) -> None:
+        for inventory in ({}, {"Car: Phat Slug": 1}, {"Car: Phat Slug": 2},
                           {"Car: Phat Slug": 1, "Car: RC Bandit": 0},
+                          {"Car: Dust Mite": 1}, {"Car: Harvester": 1}, {"Car: Volken Turbo": 1},
+                          {"Car: Toyeca": 1},
                           {"Car: Phat Slug": 1, "Car: BigVolt": 1}):
             with self.subTest(inventory=inventory):
-                with self.assertRaisesRegex(OptionError, "Casual logic.*other than Phat Slug.*starting_cars"):
-                    setup_multiworld(RVGLWorld, steps=("generate_early",), seed=0, options={
-                        "logic_difficulty": "casual", "starting_cars": 0, "start_inventory": inventory,
-                    })
+                multiworld = setup_multiworld(RVGLWorld, steps=("generate_early",), seed=0, options={
+                    "logic_difficulty": "casual", "starting_cars": 0, "start_inventory": inventory,
+                })
+                starters = [item.name for item in multiworld.precollected_items[1] if item.name.startswith("Car: ")]
+                self.assertEqual(len(starters), 1)
+                self.assertIn(starters[0], self.casual_car_names)
+                self.assertEqual(multiworld.worlds[1].options.start_inventory.value,
+                                 {name: quantity for name, quantity in inventory.items() if quantity > 0})
         for difficulty in ("standard", "expert"):
-            setup_multiworld(RVGLWorld, steps=("generate_early",), seed=0, options={
+            multiworld = setup_multiworld(RVGLWorld, steps=("generate_early",), seed=0, options={
                 "logic_difficulty": difficulty, "starting_cars": 0, "start_inventory": {"Car: Phat Slug": 1},
             })
+            self.assertFalse(any(item.name.startswith("Car: ") for item in multiworld.precollected_items[1]))
+
+    def test_qualifying_explicit_cars_satisfy_the_guarantee_without_extra_cars(self) -> None:
+        for dreamcast, count in product((False, True), (0, 1, 3)):
+            for name in self.casual_car_names | ({"Car: BigVolt"} if dreamcast else set()):
+                with self.subTest(dreamcast=dreamcast, count=count, car=name):
+                    multiworld = setup_multiworld(RVGLWorld, steps=("generate_early",), seed=0, options={
+                        "logic_difficulty": "casual", "starting_cars": count,
+                        "start_inventory": {name: 1}, "include_dreamcast_cars": dreamcast,
+                    })
+                    self.assertEqual(sum(item.name.startswith("Car: ")
+                                         for item in multiworld.precollected_items[1]), count)
+                    standard_multiworld = setup_multiworld(RVGLWorld, steps=("generate_early",), seed=0, options={
+                        "logic_difficulty": "standard", "starting_cars": count,
+                        "start_inventory": {name: 1}, "include_dreamcast_cars": dreamcast,
+                    })
+                    self.assertEqual([item.name for item in multiworld.precollected_items[1]],
+                                     [item.name for item in standard_multiworld.precollected_items[1]])
 
     def test_explicit_alternatives_and_random_supplements_are_supported(self) -> None:
         for count, inventory, dreamcast in (
+            (0, {}, False),
+            (0, {"Car: Phat Slug": 1}, False),
             (0, {"Car: Phat Slug": 1, "Car: RC Bandit": 1}, False),
             (0, {"Car: Toyeca": 1}, False),
             (0, {"Car: Phat Slug": 1, "Car: BigVolt": 1}, True),
@@ -217,7 +256,7 @@ class TestCasualStartingCars(unittest.TestCase):
                 world.create_items()
                 world.set_rules()
                 starters = {item.name for item in multiworld.precollected_items[1] if item.name.startswith("Car: ")}
-                self.assertTrue(starters - {"Car: Phat Slug"})
+                self.assertTrue(starters & (self.casual_car_names | ({"Car: BigVolt"} if dreamcast else set())))
                 pool_names = {item.name for item in multiworld.itempool}
                 self.assertFalse(starters & pool_names)
                 distribute_items_restrictive(multiworld)

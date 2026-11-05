@@ -79,14 +79,14 @@ PRACTICE_STAR_MIN_DIFFICULTY = {
 # Pest Control, Rotor and RV Loco qualify only in Expert, as described by LogicDifficulty.
 # Edit individual entries here to adjust a specific car/cup combination.
 CHAMPIONSHIP_CAR_DATA: dict[str, tuple[int | None, ...]] = {
-    "rc":         (STANDARD, EXPERT,   None,     None),
+    "rc":         (CASUAL,   EXPERT,   None,     None),
     "mite":       (STANDARD, EXPERT,   None,     None),
     "phat":       (STANDARD, EXPERT,   None,     None),
-    "moss":       (STANDARD, EXPERT,   None,     None),
+    "moss":       (CASUAL,   EXPERT,   None,     None),
     "mud":        (STANDARD, EXPERT,   None,     None),
-    "beatall":    (STANDARD, EXPERT,   None,     None),
+    "beatall":    (CASUAL,   EXPERT,   None,     None),
     "volken":     (STANDARD, EXPERT,   None,     None),
-    "tc6":        (STANDARD, EXPERT,   None,     None),
+    "tc6":        (CASUAL,   EXPERT,   None,     None),
     "dino":       (CASUAL,   STANDARD, EXPERT,   None),
     "candy":      (CASUAL,   STANDARD, EXPERT,   None),
     "gencar":     (STANDARD, EXPERT,   None,     None),
@@ -107,7 +107,7 @@ CHAMPIONSHIP_CAR_DATA: dict[str, tuple[int | None, ...]] = {
     "toyeca":     (CASUAL,   CASUAL,   CASUAL,   CASUAL),
     "amw":        (CASUAL,   CASUAL,   CASUAL,   CASUAL),
     "panga":      (CASUAL,   CASUAL,   CASUAL,   CASUAL),
-    "bigvolt":    (STANDARD, EXPERT,   None,     None),
+    "bigvolt":    (CASUAL,   EXPERT,   None,     None),
     "bossvolt":   (CASUAL,   CASUAL,   STANDARD, EXPERT),
     "jg6rc":      (STANDARD, EXPERT,   None,     None),
     "tc12":       (CASUAL,   STANDARD, EXPERT,   None),
@@ -140,7 +140,7 @@ CHAMPIONSHIP_MIN_DIFFICULTY = {
 # Entries are independent so individual car/track ratings can be edited freely.
 TIME_TRIAL_CAR_DATA: dict[str, tuple[int | None, ...]] = {
     "rc":         (
-        STANDARD, STANDARD, STANDARD, STANDARD,
+        CASUAL,   CASUAL,   CASUAL,   CASUAL,
         STANDARD, None,     STANDARD, STANDARD,
         EXPERT,   None,     None,
         None,     None,     None,
@@ -158,7 +158,7 @@ TIME_TRIAL_CAR_DATA: dict[str, tuple[int | None, ...]] = {
         None,     None,     None,
     ),
     "moss":       (
-        STANDARD, STANDARD, STANDARD, STANDARD,
+        CASUAL,   CASUAL,   STANDARD, CASUAL,
         STANDARD, None,     STANDARD, STANDARD,
         None,     None,     None,
         None,     None,     None,
@@ -170,7 +170,7 @@ TIME_TRIAL_CAR_DATA: dict[str, tuple[int | None, ...]] = {
         None,     None,     None,
     ),
     "beatall":    (
-        STANDARD, STANDARD, STANDARD, STANDARD,
+        CASUAL,   CASUAL,   CASUAL,   CASUAL,
         STANDARD, None,     STANDARD, STANDARD,
         EXPERT,   None,     None,
         None,     None,     None,
@@ -182,7 +182,7 @@ TIME_TRIAL_CAR_DATA: dict[str, tuple[int | None, ...]] = {
         None,     None,     None,
     ),
     "tc6":        (
-        STANDARD, STANDARD, STANDARD, STANDARD,
+        CASUAL,   CASUAL,   STANDARD, CASUAL,
         STANDARD, None,     STANDARD, STANDARD,
         None,     None,     None,
         None,     None,     None,
@@ -308,7 +308,7 @@ TIME_TRIAL_CAR_DATA: dict[str, tuple[int | None, ...]] = {
         CASUAL,   CASUAL,   CASUAL,
     ),
     "bigvolt":    (
-        STANDARD, STANDARD, STANDARD, STANDARD,
+        CASUAL,   CASUAL,   STANDARD, CASUAL,
         STANDARD, EXPERT,   STANDARD, EXPERT,
         None,     None,     None,
         None,     None,     None,
