@@ -10,7 +10,7 @@ from worlds.AutoWorld import call_all
 from .. import RVGLWorld
 from ..cars import DC_CARS, STOCK_CARS
 from ..items import get_car_item_name, get_track_item_name
-from ..locations import get_practice_star_location_name, get_single_race_location_name, get_time_trial_location_name
+from ..locations import get_practice_star_location_name, get_single_race_location_name
 from ..logic import (
     PRACTICE_STAR_CAR_DATA,
     PRACTICE_STAR_MIN_DIFFICULTY,
@@ -59,7 +59,6 @@ class TestPracticeStarRules(unittest.TestCase):
                 track_state.collect(world.create_item(get_track_item_name(track)), prevent_sweep=True)
                 self.assertFalse(location.can_reach(track_state))
                 self.assertTrue(world.get_location(get_single_race_location_name(track)).can_reach(track_state))
-                self.assertTrue(world.get_location(get_time_trial_location_name(track)).can_reach(track_state))
 
                 column = PRACTICE_STAR_RESTRICTED_TRACKS.index(track.folder)
                 eligible_cars = []

@@ -30,6 +30,7 @@ from ..locations import (
     STUNT_ARENA_LOCATIONS,
     get_car_race_win_location_name,
 )
+from ..logic import CHAMPIONSHIP_MIN_DIFFICULTY
 from ..options import Goal, option_groups
 from ..regions import get_car_region_name, get_cup_region_name, get_track_region_name
 from ..stunt_arena import STOCK_STUNT_ARENA_STAR_COUNT
@@ -183,20 +184,22 @@ class TestGoals(unittest.TestCase):
 
 class TestGoalRules(unittest.TestCase):
     def _goal_item_names(self, world: RVGLWorld) -> tuple[str, ...]:
-        """Return goal items needed in addition to the guaranteed starting RC Bandit."""
+        """Return the goal unlocks, with car capability satisfied separately."""
         if world.options.goal == "platinum_cup":
             return ("Platinum Cup",)
         if world.options.goal == "carsanity":
             return (*(get_car_item_name(car) for car in world.get_enabled_cars() if car != STOCK_CARS[0]),
                     "Track: Toys in the Hood 1")
-        track_items = tuple(get_track_item_name(track) for track in world.get_enabled_tracks())
-        if world.options.goal == "tracksanity_plus":
-            return (*track_items, "Car: Toyeca")
-        return track_items
+        return tuple(get_track_item_name(track) for track in world.get_enabled_tracks())
 
     def _state_with_items(self, world: RVGLWorld, item_names: tuple[str, ...]) -> CollectionState:
         state = CollectionState(world.multiworld)
-        state.collect(world.create_item("Car: RC Bandit"), prevent_sweep=True)
+        if world.options.goal in ("platinum_cup", "tracksanity_plus"):
+            # Isolate goal unlock requirements from the separately covered car-capability rules.
+            for car in world.get_enabled_cars():
+                state.collect(world.create_item(get_car_item_name(car)), prevent_sweep=True)
+        else:
+            state.collect(world.create_item("Car: RC Bandit"), prevent_sweep=True)
         for item_name in item_names:
             state.collect(world.create_item(item_name), prevent_sweep=True)
         return state
@@ -597,9 +600,9 @@ class TestRegionAccess(unittest.TestCase):
 
         empty_state = CollectionState(multiworld)
         for player in multiworld.player_ids:
-            empty_state.collect(multiworld.worlds[player].create_item("Car: RC Bandit"), prevent_sweep=True)
-            # Satisfy the independent Practice-star car rules while isolating track ownership.
-            empty_state.collect(multiworld.worlds[player].create_item("Car: Toyeca"), prevent_sweep=True)
+            # Satisfy the independent car rules while isolating track and cup ownership.
+            for car in multiworld.worlds[player].get_enabled_cars():
+                empty_state.collect(multiworld.worlds[player].create_item(get_car_item_name(car)), prevent_sweep=True)
             self.assertTrue(multiworld.get_region("Menu", player).can_reach(empty_state))
             for region_name, _ in requirements:
                 with self.subTest(player=player, region=region_name, inventory="empty"):
@@ -801,7 +804,11 @@ class TestCarsanity(unittest.TestCase):
         self.assertFalse(multiworld.completion_condition[1](state))
 
         state = CollectionState(multiworld)
-        state.collect(world.create_item("Car: RC Bandit"))
+        requirements = CHAMPIONSHIP_MIN_DIFFICULTY[world.goal_cup.folder]
+        car = next(car for car in world.get_enabled_cars()
+                   if requirements[car.folder] is not None
+                   and requirements[car.folder] <= world.options.logic_difficulty.value)
+        state.collect(world.create_item(get_car_item_name(car)))
         state.collect(world.create_item("Platinum Cup"))
         state.sweep_for_advancements()
         self.assertTrue(multiworld.completion_condition[1](state))
