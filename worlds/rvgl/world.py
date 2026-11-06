@@ -50,6 +50,15 @@ class RVGLWorld(World):
                 f"RVGL player {self.player} ({self.player_name}) must have at least one starting car. "
                 "Increase starting_cars or add an enabled car to start_inventory."
             )
+        starting_track_count = self.options.starting_tracks.value + sum(
+            self.options.start_inventory.value.get(items.get_track_item_name(track), 0)
+            for track in self.get_enabled_tracks()
+        )
+        if starting_track_count == 0:
+            raise OptionError(
+                f"RVGL player {self.player} ({self.player_name}) must have at least one starting track. "
+                "Increase starting_tracks or add an enabled track to start_inventory."
+            )
         rookie_cars = tuple(car for car in self.get_enabled_cars() if car.rating == 0)
         starting_cars = []
         if self.options.logic_difficulty == LogicDifficulty.option_casual:

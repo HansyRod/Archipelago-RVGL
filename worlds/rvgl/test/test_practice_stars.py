@@ -159,7 +159,7 @@ class TestPracticeStarRules(unittest.TestCase):
         options = [
             {"logic_difficulty": difficulty, "include_dreamcast_cars": dreamcast,
              "include_dreamcast_track_rooftops": dreamcast, "starting_cars": 1,
-             "starting_tracks": 0 if dreamcast else 1, "goal": "tracksanity_plus"}
+             "starting_tracks": 1, "goal": "tracksanity_plus"}
             for difficulty, dreamcast in product(("casual", "standard", "expert"), (False, True))
         ]
         multiworld = setup_multiworld([RVGLWorld] * len(options), seed=0, options=options)

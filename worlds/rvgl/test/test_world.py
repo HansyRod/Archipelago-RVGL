@@ -166,7 +166,7 @@ class TestGoals(unittest.TestCase):
 
     def test_starting_inventory_and_seed_do_not_remove_or_reorder_goal_checks(self) -> None:
         for goal, starting_cars, starting_tracks in product(
-            ("carsanity", "tracksanity", "tracksanity_plus"), (1, 3, 8), (0, 1, 4),
+            ("carsanity", "tracksanity", "tracksanity_plus"), (1, 3, 8), (1, 2, 4),
         ):
             with self.subTest(goal=goal, starting_cars=starting_cars, starting_tracks=starting_tracks):
                 expected_sources = STOCK_CARS if goal == "carsanity" else STOCK_TRACKS
@@ -280,7 +280,7 @@ class TestGoalRules(unittest.TestCase):
         options = [
             {"goal": goal, "include_dreamcast_cars": cars, "include_dreamcast_track_rooftops": rooftops,
              "carsanity": "disabled", "include_single_race_wins": False,
-             "starting_cars": 1 if cars else 3, "starting_tracks": 4 if cars else 0}
+             "starting_cars": 1 if cars else 3, "starting_tracks": 4 if cars else 1}
             for goal, cars, rooftops in product(
                 ("platinum_cup", "carsanity", "tracksanity", "tracksanity_plus"), (False, True), (False, True),
             )
@@ -368,11 +368,58 @@ class TestStartingCars(unittest.TestCase):
 
 
 class TestStartingTracks(unittest.TestCase):
+    def test_zero_starting_tracks_raises_option_error(self) -> None:
+        for goal, difficulty, starting_inventory in product(
+            ("platinum_cup", "carsanity", "tracksanity", "tracksanity_plus"),
+            ("casual", "standard", "expert"),
+            ({}, {"Track: Toys in the Hood 1": 0}, {"Car: RC Bandit": 1},
+             {"Bronze Cup": 1}, {"Track: Rooftops": 1}),
+        ):
+            with self.subTest(goal=goal, difficulty=difficulty, start_inventory=starting_inventory):
+                with self.assertRaisesRegex(OptionError, "at least one starting track.*starting_tracks.*start_inventory"):
+                    setup_multiworld(RVGLWorld, seed=0, options={
+                        "goal": goal, "logic_difficulty": difficulty,
+                        "starting_tracks": 0, "start_inventory": starting_inventory,
+                        "include_stunt_arena_stars": True,
+                    })
+        with self.assertRaisesRegex(OptionError, r"RVGL player 2 \(Tester2\).*at least one starting track"):
+            setup_multiworld([RVGLWorld, RVGLWorld], seed=0, options=[{}, {"starting_tracks": 0}])
+
+    def test_explicit_starting_tracks_are_applied_before_item_creation(self) -> None:
+        for goal, difficulty, (track_name, dreamcast) in product(
+            ("platinum_cup", "carsanity", "tracksanity", "tracksanity_plus"),
+            ("casual", "standard", "expert"),
+            (("Track: Toys in the Hood 1", False), ("Track: Ghost Town 2", False), ("Track: Rooftops", True)),
+        ):
+            with self.subTest(goal=goal, difficulty=difficulty, track=track_name):
+                multiworld = setup_multiworld(RVGLWorld, steps=("generate_early", "create_regions"), seed=0, options={
+                    "goal": goal, "logic_difficulty": difficulty, "starting_tracks": 0,
+                    "start_inventory": {track_name: 1}, "include_dreamcast_track_rooftops": dreamcast,
+                })
+                world = multiworld.worlds[1]
+                self.assertFalse(any(item.name.startswith("Track: ") for item in multiworld.precollected_items[1]))
+                # Match Main.py: apply start_inventory after generate_early and before create_items.
+                for item_name, count in world.options.start_inventory.value.items():
+                    for _ in range(count):
+                        world.push_precollected(world.create_item(item_name))
+                world.create_items()
+                world.set_rules()
+                self.assertEqual([item.name for item in multiworld.precollected_items[1]
+                                  if item.name.startswith("Track: ")], [track_name])
+                self.assertNotIn(track_name, [item.name for item in multiworld.itempool])
+                self.assertEqual(world.options.starting_tracks.value, 0)
+                self.assertEqual(world.options.start_inventory.value, {track_name: 1})
+                self.assertEqual(len(multiworld.itempool), len(multiworld.get_unfilled_locations(1)))
+                distribute_items_restrictive(multiworld)
+                self.assertFalse(multiworld.get_unfilled_locations())
+                self.assertTrue(multiworld.can_beat_game())
+                self.assertTrue(multiworld.fulfills_accessibility())
+
     def test_starting_track_counts_and_item_pool(self) -> None:
         easy_names = {
             get_track_item_name(track) for track in (*STOCK_TRACKS, *DC_TRACKS) if track.difficulty == 1
         }
-        for count in range(5):
+        for count in range(1, 5):
             with self.subTest(starting_tracks=count):
                 multiworld = setup_multiworld(RVGLWorld, seed=0, options={"starting_tracks": count})
                 starting_items = multiworld.precollected_items[1]
@@ -676,7 +723,7 @@ class TestCarsanity(unittest.TestCase):
     def test_mixed_options_generate_and_fill_in_both_player_orders(self) -> None:
         options = [
             {"carsanity": carsanity, "include_dreamcast_cars": cars, "include_dreamcast_track_rooftops": rooftops,
-             "include_single_race_wins": False, "include_stunt_arena_stars": True, "starting_tracks": 0}
+             "include_single_race_wins": False, "include_stunt_arena_stars": True, "starting_tracks": 1}
             for carsanity, cars, rooftops in product(("disabled", "enabled"), (False, True), (False, True))
         ]
         catalogue = dict(RVGLWorld.location_name_to_id)
@@ -764,10 +811,12 @@ class TestCarsanity(unittest.TestCase):
             self.assertEqual(world.get_location("Win Race with Car: RC Bandit").can_reach(state), player == 2)
 
     def test_zero_starting_tracks_blocks_starting_car_checks_until_a_track_is_received(self) -> None:
-        multiworld = setup_multiworld(RVGLWorld, seed=0, options={
+        # Isolate the ownership rule from generation's starting-track validation.
+        multiworld = setup_multiworld(RVGLWorld, steps=("create_regions", "set_rules"), seed=0, options={
             "carsanity": "enabled", "starting_tracks": 0, "include_single_race_wins": False,
         })
         world = multiworld.worlds[1]
+        world.push_precollected(world.create_item("Car: RC Bandit"))
         starting_names = {item.name for item in multiworld.precollected_items[1]}
         self.assertFalse(any(name.startswith("Track:") for name in starting_names))
         state = multiworld.state.copy()

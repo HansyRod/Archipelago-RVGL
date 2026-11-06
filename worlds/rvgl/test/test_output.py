@@ -240,7 +240,7 @@ class TestOutput(unittest.TestCase):
     def test_carsanity_output_matches_each_players_car_pool_and_track_check_options(self) -> None:
         options = [
             {"carsanity": carsanity, "include_dreamcast_cars": cars, "include_single_race_wins": race_wins,
-             "starting_tracks": 0}
+             "starting_tracks": 1}
             for carsanity, cars, race_wins in product(("disabled", "enabled"), (False, True), (False, True))
         ]
         multiworld = setup_multiworld([RVGLWorld] * len(options), seed=0, options=options)

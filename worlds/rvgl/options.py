@@ -64,6 +64,7 @@ class StartingTracks(Range):
     """Number of Easy tracks accessible from the start.
 
     To have specific starting tracks, use the start_inventory option and set this to 0.
+    You must have at least one starting track across this option and the start_inventory.
     """
     display_name = "Starting Tracks"
     range_start = 0
