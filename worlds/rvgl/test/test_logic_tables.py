@@ -2,13 +2,16 @@ import unittest
 from itertools import product
 
 from BaseClasses import CollectionState
+from Fill import distribute_items_restrictive
 from test.general import setup_multiworld
+from worlds.AutoWorld import call_all
 
 from .. import RVGLWorld
 from ..cars import DC_CARS, STOCK_CARS
 from ..cups import STOCK_CUPS
 from ..items import get_car_item_name, get_cup_item_name, get_track_item_name
 from ..locations import (
+    STUNT_ARENA_LOCATIONS,
     get_championship_location_name,
     get_mirror_time_trial_location_name,
     get_reverse_time_trial_location_name,
@@ -18,11 +21,14 @@ from ..locations import (
 from ..logic import (
     CHAMPIONSHIP_CAR_DATA,
     CHAMPIONSHIP_MIN_DIFFICULTY,
+    STUNT_ARENA_CAR_DATA,
+    STUNT_ARENA_MIN_DIFFICULTY,
     TIME_TRIAL_CAR_DATA,
     TIME_TRIAL_MIN_DIFFICULTY,
 )
 from ..options import LogicDifficulty
 from ..output import TRACK_SLOTS
+from ..stunt_arena import STOCK_STUNT_ARENA
 from ..tracks import STOCK_TRACKS
 
 
@@ -32,6 +38,7 @@ class TestLogicTables(unittest.TestCase):
         for columns, rows, lookup in (
             (tuple(cup.folder for cup in STOCK_CUPS), CHAMPIONSHIP_CAR_DATA, CHAMPIONSHIP_MIN_DIFFICULTY),
             (tuple(track.folder for track in TRACK_SLOTS), TIME_TRIAL_CAR_DATA, TIME_TRIAL_MIN_DIFFICULTY),
+            (tuple(range(1, STOCK_STUNT_ARENA.star_count + 1)), STUNT_ARENA_CAR_DATA, STUNT_ARENA_MIN_DIFFICULTY),
         ):
             self.assertEqual(set(rows), car_folders)
             self.assertEqual(tuple(lookup), columns)
@@ -44,6 +51,7 @@ class TestLogicTables(unittest.TestCase):
         for columns, rows, lookup in (
             (tuple(cup.folder for cup in STOCK_CUPS), CHAMPIONSHIP_CAR_DATA, CHAMPIONSHIP_MIN_DIFFICULTY),
             (tuple(track.folder for track in TRACK_SLOTS), TIME_TRIAL_CAR_DATA, TIME_TRIAL_MIN_DIFFICULTY),
+            (tuple(range(1, STOCK_STUNT_ARENA.star_count + 1)), STUNT_ARENA_CAR_DATA, STUNT_ARENA_MIN_DIFFICULTY),
         ):
             for car, difficulties in rows.items():
                 with self.subTest(car=car, columns=columns):
@@ -57,7 +65,7 @@ class TestLogicTables(unittest.TestCase):
             world = setup_multiworld(RVGLWorld, steps=(), seed=0, options={
                 "logic_difficulty": difficulty, "include_dreamcast_cars": dreamcast,
             }).worlds[1]
-            for lookup in (CHAMPIONSHIP_MIN_DIFFICULTY, TIME_TRIAL_MIN_DIFFICULTY):
+            for lookup in (CHAMPIONSHIP_MIN_DIFFICULTY, TIME_TRIAL_MIN_DIFFICULTY, STUNT_ARENA_MIN_DIFFICULTY):
                 for check, requirements in lookup.items():
                     with self.subTest(check=check, difficulty=difficulty, dreamcast=dreamcast):
                         self.assertTrue(any(
@@ -170,3 +178,80 @@ class TestCarLogicRules(unittest.TestCase):
                 self.assertTrue(location.can_reach(state))
                 for track in world.get_enabled_tracks():
                     self.assertFalse(world.get_location(get_time_trial_location_name(track)).can_reach(state))
+
+
+    def test_every_car_matches_stunt_arena_data_at_every_tier(self) -> None:
+        for difficulty, dreamcast in product(range(3), (False, True)):
+            world = setup_multiworld(RVGLWorld, steps=("create_regions", "set_rules"), seed=0, options={
+                "logic_difficulty": difficulty, "include_dreamcast_cars": dreamcast,
+                "include_stunt_arena_stars": True,
+            }).worlds[1]
+            content_only = CollectionState(world.multiworld)
+            for track in world.get_enabled_tracks():
+                content_only.collect(world.create_item(get_track_item_name(track)), prevent_sweep=True)
+            for cup in STOCK_CUPS:
+                content_only.collect(world.create_item(get_cup_item_name(cup)), prevent_sweep=True)
+            for location_data in STUNT_ARENA_LOCATIONS:
+                self.assertFalse(world.get_location(location_data.name).can_reach(content_only))
+
+            for car in (*STOCK_CARS, *DC_CARS):
+                # Car ownership alone must suffice; Stunt Arena has no track/cup unlock item.
+                state = CollectionState(world.multiworld)
+                state.collect(world.create_item(get_car_item_name(car)), prevent_sweep=True)
+                for column, location_data in enumerate(STUNT_ARENA_LOCATIONS):
+                    minimum = STUNT_ARENA_CAR_DATA[car.folder][column]
+                    expected = (car in world.get_enabled_cars() and minimum is not None and minimum <= difficulty)
+                    with self.subTest(star=column + 1, car=car.folder, tier=difficulty, dreamcast=dreamcast):
+                        self.assertEqual(world.get_location(location_data.name).can_reach(state), expected)
+
+            for column, location_data in enumerate(STUNT_ARENA_LOCATIONS):
+                eligible = [car for car in world.get_enabled_cars()
+                            if STUNT_ARENA_CAR_DATA[car.folder][column] is not None
+                            and STUNT_ARENA_CAR_DATA[car.folder][column] <= difficulty]
+                ineligible = [car for car in world.get_enabled_cars() if car not in eligible]
+                with self.subTest(star=column + 1, tier=difficulty, dreamcast=dreamcast, alternative=True):
+                    state = CollectionState(world.multiworld)
+                    if ineligible:
+                        state.collect(world.create_item(get_car_item_name(ineligible[0])), prevent_sweep=True)
+                        self.assertFalse(world.get_location(location_data.name).can_reach(state))
+                    state.collect(world.create_item(get_car_item_name(eligible[0])), prevent_sweep=True)
+                    self.assertTrue(world.get_location(location_data.name).can_reach(state))
+
+    def test_stunt_arena_car_ownership_and_difficulty_are_player_specific(self) -> None:
+        multiworld = setup_multiworld([RVGLWorld, RVGLWorld], steps=("create_regions", "set_rules"), seed=0,
+                                     options=[{"logic_difficulty": "casual", "include_stunt_arena_stars": True},
+                                              {"logic_difficulty": "expert", "include_dreamcast_cars": True,
+                                               "include_stunt_arena_stars": True}])
+        for car_owner, car in product((1, 2), (*STOCK_CARS, *DC_CARS)):
+            state = CollectionState(multiworld)
+            state.collect(multiworld.worlds[car_owner].create_item(get_car_item_name(car)), prevent_sweep=True)
+            for player, world in multiworld.worlds.items():
+                for column, location_data in enumerate(STUNT_ARENA_LOCATIONS):
+                    minimum = STUNT_ARENA_CAR_DATA[car.folder][column]
+                    expected = (player == car_owner and car in world.get_enabled_cars()
+                                and minimum is not None and minimum <= world.options.logic_difficulty.value)
+                    with self.subTest(player=player, car_owner=car_owner, car=car.folder, star=column + 1):
+                        self.assertEqual(world.get_location(location_data.name).can_reach(state), expected)
+
+    def test_stunt_arena_options_and_mixed_difficulties_fill(self) -> None:
+        options = [
+            {"logic_difficulty": difficulty, "include_dreamcast_cars": dreamcast,
+             "include_stunt_arena_stars": True, "starting_cars": 1, "starting_tracks": 1}
+            for difficulty, dreamcast in product(("casual", "standard", "expert"), (False, True))
+        ]
+        options.append({"include_stunt_arena_stars": False})
+        for player_options in (options, list(reversed(options))):
+            multiworld = setup_multiworld([RVGLWorld] * len(player_options), seed=0, options=player_options)
+            for player, world in multiworld.worlds.items():
+                names = {location.name for location in world.get_locations()}
+                for location_data in STUNT_ARENA_LOCATIONS:
+                    with self.subTest(player=player, options=player_options[player - 1], star=location_data.name):
+                        self.assertEqual(location_data.name in names, bool(world.options.include_stunt_arena_stars))
+                        if world.options.include_stunt_arena_stars:
+                            self.assertEqual(world.get_location(location_data.name).address, location_data.id)
+            distribute_items_restrictive(multiworld)
+            call_all(multiworld, "post_fill")
+            call_all(multiworld, "finalize_multiworld")
+            self.assertFalse(multiworld.get_unfilled_locations())
+            self.assertTrue(multiworld.can_beat_game())
+            self.assertTrue(multiworld.fulfills_accessibility())

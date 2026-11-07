@@ -526,6 +526,8 @@ class TestStuntArena(unittest.TestCase):
                     filler_counts[player] = sum(item.name == FILLER_ITEM.name for item in pool)
                     if player == enabled_player:
                         state = CollectionState(multiworld)
+                        for car in world.get_enabled_cars():
+                            state.collect(world.create_item(get_car_item_name(car)), prevent_sweep=True)
                         for location in STUNT_ARENA_LOCATIONS:
                             self.assertTrue(world.get_location(location.name).can_reach(state))
 

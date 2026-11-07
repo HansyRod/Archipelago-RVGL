@@ -9,6 +9,7 @@ from typing import cast
 from .cups import CupData
 from .items import DC_TRACK_ITEMS, STOCK_CUP_ITEMS, STOCK_TRACK_ITEMS
 from .options import LogicDifficulty
+from .stunt_arena import STOCK_STUNT_ARENA
 from .tracks import TrackData
 
 CASUAL = LogicDifficulty.option_casual
@@ -399,4 +400,268 @@ TIME_TRIAL_MIN_DIFFICULTY = {
     }
     # Preserve native columns: the four Easy tracks, Rooftops, then the remaining stock tracks.
     for column, item in enumerate((*STOCK_TRACK_ITEMS[:4], *DC_TRACK_ITEMS, *STOCK_TRACK_ITEMS[4:]))
+}
+
+
+# Columns are Stunt Arena stars 1 through 20, in check-number order.
+# Each car tuple groups stars 1-5, 6-10, 11-15 and 16-20 on separate lines.
+STUNT_ARENA_CAR_DATA: dict[str, tuple[int | None, ...]] = {
+    "rc":         (
+        EXPERT, CASUAL, EXPERT, EXPERT, None,
+        EXPERT, EXPERT, CASUAL, STANDARD, STANDARD,
+        None, None, STANDARD, CASUAL, CASUAL,
+        None, None, None, None, None,
+    ),
+    "mite":       (
+        EXPERT, CASUAL, CASUAL, EXPERT, None,
+        EXPERT, EXPERT, CASUAL, STANDARD, STANDARD,
+        None, None, STANDARD, CASUAL, CASUAL,
+        None, None, None, None, None,
+    ),
+    "phat":       (
+        None, CASUAL, CASUAL, EXPERT, None,
+        EXPERT, EXPERT, CASUAL, EXPERT, STANDARD,
+        None, None, STANDARD, STANDARD, STANDARD,
+        None, None, None, None, None,
+    ),
+    "moss":       (
+        STANDARD, CASUAL, EXPERT, EXPERT, None,
+        EXPERT, EXPERT, CASUAL, STANDARD, STANDARD,
+        None, None, STANDARD, CASUAL, CASUAL,
+        None, None, None, None, None,
+    ),
+    "mud":        (
+        STANDARD, CASUAL, CASUAL, CASUAL, None,
+        EXPERT, EXPERT, CASUAL, STANDARD, STANDARD,
+        None, None, STANDARD, CASUAL, CASUAL,
+        None, None, None, None, None,
+    ),
+    "beatall":    (
+        STANDARD, CASUAL, CASUAL, CASUAL, CASUAL,
+        EXPERT, EXPERT, CASUAL, STANDARD, STANDARD,
+        None, None, STANDARD, CASUAL, CASUAL,
+        None, None, None, None, None,
+    ),
+    "volken":     (
+        EXPERT, CASUAL, None, EXPERT, None,
+        EXPERT, EXPERT, CASUAL, STANDARD, STANDARD,
+        None, None, STANDARD, CASUAL, CASUAL,
+        None, None, None, None, None,
+    ),
+    "tc6":        (
+        None, CASUAL, CASUAL, EXPERT, None,
+        EXPERT, EXPERT, CASUAL, STANDARD, None,
+        None, None, None, CASUAL, CASUAL,
+        None, None, None, None, None,
+    ),
+    "dino":       (
+        STANDARD, CASUAL, CASUAL, CASUAL, CASUAL,
+        STANDARD, STANDARD, CASUAL, CASUAL, STANDARD,
+        None, None, CASUAL, CASUAL, CASUAL,
+        None, None, None, None, None,
+    ),
+    "candy":      (
+        STANDARD, CASUAL, CASUAL, CASUAL, CASUAL,
+        STANDARD, STANDARD, CASUAL, CASUAL, CASUAL,
+        None, None, CASUAL, CASUAL, CASUAL,
+        None, None, None, None, None,
+    ),
+    "gencar":     (
+        STANDARD, CASUAL, CASUAL, CASUAL, CASUAL,
+        STANDARD, STANDARD, CASUAL, CASUAL, None,
+        None, None, CASUAL, CASUAL, CASUAL,
+        None, None, None, None, None,
+    ),
+    "tc4":        (
+        STANDARD, CASUAL, CASUAL, CASUAL, CASUAL,
+        STANDARD, STANDARD, CASUAL, CASUAL, CASUAL,
+        None, None, CASUAL, CASUAL, CASUAL,
+        None, None, None, None, None,
+    ),
+    "mouse":      (
+        STANDARD, CASUAL, CASUAL, CASUAL, CASUAL,
+        STANDARD, STANDARD, CASUAL, CASUAL, CASUAL,
+        None, None, CASUAL, CASUAL, CASUAL,
+        STANDARD, STANDARD, None, None, None,
+    ),
+    "flag":       (
+        CASUAL, CASUAL, CASUAL, CASUAL, CASUAL,
+        CASUAL, CASUAL, CASUAL, CASUAL, CASUAL,
+        None, None, CASUAL, CASUAL, CASUAL,
+        None, None, None, None, None,
+    ),
+    "tc2":        (
+        CASUAL, CASUAL, CASUAL, CASUAL, CASUAL,
+        CASUAL, CASUAL, CASUAL, CASUAL, CASUAL,
+        None, None, CASUAL, CASUAL, CASUAL,
+        None, STANDARD, None, None, None,
+    ),
+    "r5":         (
+        CASUAL, CASUAL, CASUAL, CASUAL, CASUAL,
+        CASUAL, CASUAL, CASUAL, CASUAL, None,
+        None, None, CASUAL, CASUAL, CASUAL,
+        None, None, None, None, None,
+    ),
+    "tc5":        (
+        CASUAL, CASUAL, CASUAL, CASUAL, CASUAL,
+        CASUAL, CASUAL, CASUAL, CASUAL, CASUAL,
+        None, None, CASUAL, CASUAL, CASUAL,
+        None, None, None, None, None,
+    ),
+    "sgt":        (
+        CASUAL, CASUAL, CASUAL, CASUAL, CASUAL,
+        CASUAL, CASUAL, CASUAL, CASUAL, CASUAL,
+        None, None, CASUAL, CASUAL, CASUAL,
+        STANDARD, STANDARD, None, None, None,
+    ),
+    "tc3":        (
+        EXPERT, EXPERT, EXPERT, EXPERT, EXPERT,
+        EXPERT, EXPERT, EXPERT, EXPERT, EXPERT,
+        None, None, EXPERT, EXPERT, EXPERT,
+        None, None, None, None, None,
+    ),
+    "adeon":      (
+        CASUAL, CASUAL, CASUAL, CASUAL, CASUAL,
+        CASUAL, CASUAL, CASUAL, CASUAL, CASUAL,
+        None, None, CASUAL, CASUAL, CASUAL,
+        None, CASUAL, None, None, None,
+    ),
+    "fone":       (
+        CASUAL, CASUAL, CASUAL, CASUAL, CASUAL,
+        CASUAL, CASUAL, CASUAL, CASUAL, CASUAL,
+        None, None, CASUAL, CASUAL, CASUAL,
+        STANDARD, STANDARD, None, None, None,
+    ),
+    "tc1":        (
+        CASUAL, CASUAL, CASUAL, CASUAL, CASUAL,
+        CASUAL, CASUAL, CASUAL, CASUAL, CASUAL,
+        None, None, CASUAL, CASUAL, CASUAL,
+        CASUAL, CASUAL, None, None, None,
+    ),
+    "rotor":      (
+        EXPERT, EXPERT, EXPERT, EXPERT, EXPERT,
+        EXPERT, EXPERT, EXPERT, EXPERT, EXPERT,
+        None, None, EXPERT, EXPERT, EXPERT,
+        None, None, None, None, None,
+    ),
+    "cougar":     (
+        CASUAL, CASUAL, CASUAL, CASUAL, CASUAL,
+        CASUAL, CASUAL, CASUAL, CASUAL, CASUAL,
+        STANDARD, STANDARD, CASUAL, CASUAL, CASUAL,
+        CASUAL, CASUAL, None, None, None,
+    ),
+    "sugo":       (
+        CASUAL, CASUAL, CASUAL, CASUAL, CASUAL,
+        CASUAL, CASUAL, CASUAL, CASUAL, CASUAL,
+        STANDARD, STANDARD, CASUAL, CASUAL, CASUAL,
+        CASUAL, CASUAL, None, None, None,
+    ),
+    "toyeca":     (
+        CASUAL, CASUAL, CASUAL, CASUAL, CASUAL,
+        CASUAL, CASUAL, CASUAL, CASUAL, CASUAL,
+        CASUAL, CASUAL, CASUAL, CASUAL, CASUAL,
+        CASUAL, CASUAL, None, None, None,
+    ),
+    "amw":        (
+        CASUAL, CASUAL, CASUAL, CASUAL, CASUAL,
+        CASUAL, CASUAL, CASUAL, CASUAL, CASUAL,
+        None, None, CASUAL, CASUAL, CASUAL,
+        None, STANDARD, None, None, None,
+    ),
+    "panga":      (
+        CASUAL, CASUAL, CASUAL, CASUAL, CASUAL,
+        CASUAL, CASUAL, CASUAL, CASUAL, CASUAL,
+        CASUAL, CASUAL, CASUAL, CASUAL, CASUAL,
+        CASUAL, CASUAL, CASUAL, CASUAL, CASUAL,
+    ),
+    "bigvolt":    (
+        STANDARD, CASUAL, CASUAL, CASUAL, CASUAL,
+        EXPERT, EXPERT, CASUAL, STANDARD, STANDARD,
+        None, None, STANDARD, CASUAL, CASUAL,
+        None, None, None, None, None,
+    ),
+    "bossvolt":   (
+        CASUAL, CASUAL, CASUAL, CASUAL, CASUAL,
+        CASUAL, CASUAL, CASUAL, CASUAL, CASUAL,
+        None, None, CASUAL, CASUAL, CASUAL,
+        None, STANDARD, None, None, None,
+    ),
+    "jg6rc":      (
+        STANDARD, CASUAL, None, EXPERT, None,
+        EXPERT, EXPERT, CASUAL, STANDARD, STANDARD,
+        None, None, STANDARD, CASUAL, CASUAL,
+        None, None, None, None, None,
+    ),
+    "tc12":       (
+        STANDARD, CASUAL, CASUAL, EXPERT, CASUAL,
+        STANDARD, STANDARD, CASUAL, CASUAL, STANDARD,
+        None, None, CASUAL, CASUAL, CASUAL,
+        None, None, None, None, None,
+    ),
+    "tc10":       (
+        STANDARD, CASUAL, CASUAL, CASUAL, CASUAL,
+        STANDARD, STANDARD, CASUAL, CASUAL, CASUAL,
+        None, None, CASUAL, CASUAL, CASUAL,
+        None, None, None, None, None,
+    ),
+    "tc8":        (
+        CASUAL, CASUAL, CASUAL, CASUAL, CASUAL,
+        CASUAL, CASUAL, CASUAL, CASUAL, CASUAL,
+        None, None, CASUAL, CASUAL, CASUAL,
+        None, None, None, None, None,
+    ),
+    "tc11":       (
+        STANDARD, CASUAL, CASUAL, EXPERT, CASUAL,
+        EXPERT, EXPERT, CASUAL, STANDARD, STANDARD,
+        None, None, STANDARD, CASUAL, CASUAL,
+        None, None, None, None, None,
+    ),
+    "tc9":        (
+        CASUAL, CASUAL, CASUAL, CASUAL, CASUAL,
+        CASUAL, CASUAL, CASUAL, CASUAL, CASUAL,
+        None, None, CASUAL, CASUAL, CASUAL,
+        None, None, None, None, None,
+    ),
+    "jg1jg7":     (
+        CASUAL, CASUAL, CASUAL, CASUAL, CASUAL,
+        CASUAL, CASUAL, CASUAL, CASUAL, CASUAL,
+        None, None, CASUAL, CASUAL, CASUAL,
+        CASUAL, CASUAL, None, None, None,
+    ),
+    "tc7":        (
+        CASUAL, CASUAL, CASUAL, CASUAL, CASUAL,
+        CASUAL, CASUAL, CASUAL, CASUAL, CASUAL,
+        None, None, CASUAL, CASUAL, CASUAL,
+        None, None, None, None, None,
+    ),
+    "jg3loco":    (
+        EXPERT, EXPERT, EXPERT, EXPERT, EXPERT,
+        EXPERT, EXPERT, EXPERT, EXPERT, EXPERT,
+        None, None, EXPERT, EXPERT, EXPERT,
+        None, None, None, None, None,
+    ),
+    "jg4snw35":   (
+        CASUAL, CASUAL, CASUAL, CASUAL, CASUAL,
+        CASUAL, CASUAL, CASUAL, CASUAL, CASUAL,
+        CASUAL, CASUAL, CASUAL, CASUAL, CASUAL,
+        CASUAL, CASUAL, STANDARD, STANDARD, None,
+    ),
+    "jg5purpxl":  (
+        CASUAL, CASUAL, CASUAL, CASUAL, CASUAL,
+        CASUAL, CASUAL, CASUAL, CASUAL, CASUAL,
+        CASUAL, CASUAL, CASUAL, CASUAL, CASUAL,
+        CASUAL, CASUAL, None, None, None,
+    ),
+    "jg2fulonx":  (
+        CASUAL, CASUAL, CASUAL, CASUAL, CASUAL,
+        CASUAL, CASUAL, CASUAL, CASUAL, CASUAL,
+        None, None, CASUAL, CASUAL, CASUAL,
+        None, None, None, None, None,
+    ),
+}
+
+
+STUNT_ARENA_MIN_DIFFICULTY = {
+    star_number: {car: difficulties[star_number - 1] for car, difficulties in STUNT_ARENA_CAR_DATA.items()}
+    for star_number in range(1, STOCK_STUNT_ARENA.star_count + 1)
 }

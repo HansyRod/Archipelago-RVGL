@@ -11,10 +11,17 @@ from .locations import (
     get_mirror_time_trial_location_name,
     get_practice_star_location_name,
     get_reverse_time_trial_location_name,
+    get_stunt_arena_star_location_name,
     get_time_trial_location_name,
 )
-from .logic import CHAMPIONSHIP_MIN_DIFFICULTY, PRACTICE_STAR_MIN_DIFFICULTY, TIME_TRIAL_MIN_DIFFICULTY
+from .logic import (
+    CHAMPIONSHIP_MIN_DIFFICULTY,
+    PRACTICE_STAR_MIN_DIFFICULTY,
+    STUNT_ARENA_MIN_DIFFICULTY,
+    TIME_TRIAL_MIN_DIFFICULTY,
+)
 from .regions import get_car_region_name, get_cup_region_name, get_track_region_name
+from .stunt_arena import STOCK_STUNT_ARENA
 
 if TYPE_CHECKING:
     from .world import RVGLWorld
@@ -29,7 +36,7 @@ def set_rules(world: RVGLWorld) -> None:
     Generation guarantees a starting car, so region access does not need an
     additional car requirement.
 
-    Championship, Time Trial and restricted Practice
+    Championship, Time Trial, Stunt Arena and restricted Practice
     star locations require a suitable car according to the selected logic difficulty.
     All Time Trial variants on a track share that track's car requirement.
     """
@@ -67,6 +74,13 @@ def set_rules(world: RVGLWorld) -> None:
             world.get_location(get_championship_location_name(cup)),
             get_car_rule(world, CHAMPIONSHIP_MIN_DIFFICULTY[cup.folder]),
         )
+
+    if world.options.include_stunt_arena_stars:
+        for star_number, requirements in STUNT_ARENA_MIN_DIFFICULTY.items():
+            world.set_rule(
+                world.get_location(get_stunt_arena_star_location_name(STOCK_STUNT_ARENA, star_number)),
+                get_car_rule(world, requirements),
+            )
 
     # During generation, reaching a check represents being able to complete it.
     world.set_rule(world.get_location("Victory"), And(*(
