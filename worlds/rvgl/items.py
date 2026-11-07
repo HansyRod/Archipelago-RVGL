@@ -20,6 +20,21 @@ STUNT_ARENA_ID_OFFSET = 4000000
 STOCK_ID_OFFSET = 0
 DC_ID_OFFSET = 5000
 ITEM_ID_STEP = 100
+FILLER_ID_OFFSET = 90
+FILLER_ID_STEP = 1
+
+fillers = [
+    "Star",
+    "Zap",
+    "Bomb",
+    "Fireworks",
+    "Shockwave",
+    "Ball",
+    "Battery",
+    "Water Balloon",
+    "Oil",
+    "Fake Pickup"
+]
 
 SourceData: TypeAlias = CarData | TrackData | CupData
 
@@ -40,6 +55,8 @@ def get_track_item_name(track:TrackData) -> str:
 def get_cup_item_name(cup:CupData) -> str:
     return cup.display_name
 
+def get_filler_item_name(filler:str) -> str:
+    return f"Filler: {filler}"
 
 def get_archipelago_item_name(source: SourceData | None) -> str:
     if isinstance(source, CarData):
@@ -84,14 +101,23 @@ def get_cup_item_data(cups: tuple[CupData, ...], set_offset: int) -> tuple[ItemD
         for index, cup in enumerate(cups)
     )
 
+def get_filler_item_data() -> tuple[ItemData, ...]:
+    return tuple(
+        ItemData(
+            FILLER_ID_OFFSET + index * FILLER_ID_STEP,
+            get_filler_item_name(filler),
+            ItemClassification.filler
+        )
+        for index, filler in enumerate(fillers)
+    )
+
 
 STOCK_CAR_ITEMS = get_car_item_data(STOCK_CARS, STOCK_ID_OFFSET)
 DC_CAR_ITEMS = get_car_item_data(DC_CARS, DC_ID_OFFSET)
 STOCK_TRACK_ITEMS = get_track_item_data(STOCK_TRACKS, STOCK_ID_OFFSET)
 DC_TRACK_ITEMS = get_track_item_data(DC_TRACKS, DC_ID_OFFSET)
 STOCK_CUP_ITEMS = get_cup_item_data(STOCK_CUPS, STOCK_ID_OFFSET)
-
-FILLER_ITEM = ItemData(99, "Filler", ItemClassification.filler)
+FILLER_ITEMS = get_filler_item_data()
 
 ITEM_DATA: tuple[ItemData, ...] = (
     *STOCK_CAR_ITEMS,
@@ -99,7 +125,7 @@ ITEM_DATA: tuple[ItemData, ...] = (
     *STOCK_TRACK_ITEMS,
     *DC_TRACK_ITEMS,
     *STOCK_CUP_ITEMS,
-    FILLER_ITEM,
+    *FILLER_ITEMS,
 )
 
 # Required Archipelago mapping ITEM_NAME_TO_ID

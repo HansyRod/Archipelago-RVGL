@@ -11,7 +11,7 @@ from ..cars import DC_CARS, STOCK_CARS, CarData
 from ..cups import STOCK_CUPS
 from ..items import (
     DC_CAR_ITEMS,
-    FILLER_ITEM,
+    FILLER_ITEMS,
     STOCK_CAR_ITEMS,
     STUNT_ARENA_ID_OFFSET,
     get_car_item_name,
@@ -120,7 +120,10 @@ class TestOutput(unittest.TestCase):
                 self.assertEqual(archipelago["goalEventKeys"], ["championship_win:4"])
                 self.assertIn("championship_win:4", archipelago["locations"])
                 self.assertNotIn("goalEventKey", archipelago)
-                self.assertEqual(archipelago["items"][""], FILLER_ITEM.id)
+                self.assertEqual(
+                    {key: value for key, value in archipelago["items"].items() if key.startswith("filler:")},
+                    {f"filler:{item.name}": item.id for item in FILLER_ITEMS},
+                )
 
                 stunt_locations = {
                     event_key: location_id

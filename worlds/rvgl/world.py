@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from BaseClasses import ItemClassification
 from Options import OptionError
 from worlds.AutoWorld import World
 
@@ -99,7 +100,7 @@ class RVGLWorld(World):
         itempool = [
             self.create_item(item.name)
             for item in self.get_enabled_item_data()
-            if item.name != items.FILLER_ITEM.name and item.name not in starting_item_names
+            if item.classification != ItemClassification.filler and item.name not in starting_item_names
         ]
 
         location_count = len(self.multiworld.get_unfilled_locations(self.player))
@@ -124,7 +125,7 @@ class RVGLWorld(World):
             if (item.source in enabled_cars
                 or item.source in enabled_tracks
                 or item.source in STOCK_CUPS
-                or item == items.FILLER_ITEM)
+                or item.classification == ItemClassification.filler)
         )
 
     def get_enabled_cars(self) -> tuple[CarData, ...]:
@@ -186,7 +187,7 @@ class RVGLWorld(World):
         return items.RVGLItem(item_data.name, item_data.classification, item_data.id, self.player)
 
     def get_filler_item_name(self) -> str:
-        return items.FILLER_ITEM.name
+        return self.random.choice(items.FILLER_ITEMS).name
 
     def generate_output(self, output_directory: str) -> None:
         output.generate_output(self, output_directory)

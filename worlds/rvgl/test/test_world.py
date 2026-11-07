@@ -15,7 +15,7 @@ from ..cars import DC_CARS, STOCK_CARS, CarData
 from ..cups import STOCK_CUPS, CupData
 from ..items import (
     DC_CAR_ITEMS,
-    FILLER_ITEM,
+    FILLER_ITEMS,
     ITEM_DATA,
     STOCK_CAR_ITEMS,
     get_car_item_name,
@@ -74,7 +74,7 @@ class TestRVGL(bases.WorldTestBase):
 
         self.assertEqual(len(pool), len(self.multiworld.get_unfilled_locations(self.player)))
         self.assertFalse(starting_names.intersection(pool_counts))
-        self.assertEqual(set(pool_counts) - {FILLER_ITEM.name}, unlock_names - starting_names)
+        self.assertEqual(set(pool_counts) - {item.name for item in FILLER_ITEMS}, unlock_names - starting_names)
         for item_name in unlock_names - starting_names:
             with self.subTest(item=item_name):
                 self.assertEqual(pool_counts[item_name], 1)
@@ -82,6 +82,32 @@ class TestRVGL(bases.WorldTestBase):
 
 class TestRVGLWithCarsanity(TestRVGL):
     options = {"carsanity": "enabled"}
+
+
+class TestFiller(unittest.TestCase):
+    def test_named_fillers_have_unique_registered_ids(self) -> None:
+        world = setup_multiworld(RVGLWorld, steps=(), seed=0).worlds[1]
+        expected_names = {
+            "Filler: Star", "Filler: Zap", "Filler: Bomb", "Filler: Fireworks", "Filler: Shockwave",
+            "Filler: Ball", "Filler: Battery", "Filler: Water Balloon", "Filler: Oil", "Filler: Fake Pickup",
+        }
+        self.assertEqual({item.name for item in FILLER_ITEMS}, expected_names)
+        self.assertEqual(len(world.item_name_to_id), len(set(world.item_name_to_id.values())))
+        self.assertNotIn("Filler", world.item_name_to_id)
+        for name in expected_names:
+            with self.subTest(item=name):
+                item = world.create_item(name)
+                self.assertEqual(item.classification, ItemClassification.filler)
+                self.assertEqual(item.code, world.item_name_to_id[name])
+                self.assertEqual(item.player, world.player)
+
+    def test_filler_selection_is_varied_and_reproducible(self) -> None:
+        world = setup_multiworld(RVGLWorld, steps=(), seed=0).worlds[1]
+        random_state = world.random.getstate()
+        names = [world.get_filler_item_name() for _ in range(100)]
+        self.assertEqual(set(names), {item.name for item in FILLER_ITEMS})
+        world.random.setstate(random_state)
+        self.assertEqual([world.get_filler_item_name() for _ in range(100)], names)
 
 
 class TestGoals(unittest.TestCase):
@@ -459,7 +485,7 @@ class TestItemPoolOptions(unittest.TestCase):
                 } - starting_names
                 pool = [item for item in multiworld.itempool if item.player == player]
                 self.assertEqual(
-                    Counter(item.name for item in pool if item.name != FILLER_ITEM.name), Counter(unlock_names),
+                    Counter(item.name for item in pool if item.classification != ItemClassification.filler), Counter(unlock_names),
                 )
                 self.assertEqual(len(pool), len(multiworld.get_unfilled_locations(player)))
                 self.assertEqual(
@@ -523,7 +549,7 @@ class TestStuntArena(unittest.TestCase):
 
                     pool = [item for item in multiworld.itempool if item.player == player]
                     self.assertEqual(len(pool), len(multiworld.get_unfilled_locations(player)))
-                    filler_counts[player] = sum(item.name == FILLER_ITEM.name for item in pool)
+                    filler_counts[player] = sum(item.classification == ItemClassification.filler for item in pool)
                     if player == enabled_player:
                         state = CollectionState(multiworld)
                         for car in world.get_enabled_cars():
@@ -599,7 +625,7 @@ class TestLocationPoolOptions(unittest.TestCase):
                     world.set_rules()
                     self.assertEqual(len(multiworld.itempool), len(expected_ids))
                     self.assertEqual(
-                        Counter(item.name for item in multiworld.itempool if item.name != FILLER_ITEM.name),
+                        Counter(item.name for item in multiworld.itempool if item.classification != ItemClassification.filler),
                         Counter(unlock_names),
                     )
                     distribute_items_restrictive(multiworld)
@@ -625,7 +651,7 @@ class TestLocationPoolOptions(unittest.TestCase):
             "starting_tracks": 2,
         })
         self.assertEqual(len(multiworld.itempool), len(multiworld.get_unfilled_locations(1)))
-        self.assertTrue(all(item.name != FILLER_ITEM.name for item in multiworld.itempool))
+        self.assertTrue(all(item.classification != ItemClassification.filler for item in multiworld.itempool))
         distribute_items_restrictive(multiworld)
         self.assertFalse(multiworld.get_unfilled_locations())
         self.assertTrue(multiworld.can_beat_game())
@@ -751,7 +777,9 @@ class TestCarsanity(unittest.TestCase):
                     self.assertEqual(len(multiworld.get_unfilled_locations(player)), location_count)
                     pool = [item for item in multiworld.itempool if item.player == player]
                     self.assertEqual(len(pool), location_count)
-                    filler_counts[carsanity, dreamcast, rooftops] = sum(item.name == FILLER_ITEM.name for item in pool)
+                    filler_counts[carsanity, dreamcast, rooftops] = sum(
+                        item.classification == ItemClassification.filler for item in pool
+                    )
                     self.assertEqual(world.location_name_to_id, catalogue)
             for dreamcast, rooftops in product((False, True), repeat=2):
                 self.assertEqual(filler_counts[True, dreamcast, rooftops] - filler_counts[False, dreamcast, rooftops],
@@ -836,7 +864,7 @@ class TestCarsanity(unittest.TestCase):
             setup_multiworld(RVGLWorld, seed=0, options=options)
         multiworld = setup_multiworld(RVGLWorld, seed=0, options={**options, "starting_cars": 8, "starting_tracks": 4})
         self.assertEqual(len(multiworld.itempool), 32)
-        self.assertTrue(all(item.name != FILLER_ITEM.name for item in multiworld.itempool))
+        self.assertTrue(all(item.classification != ItemClassification.filler for item in multiworld.itempool))
         distribute_items_restrictive(multiworld)
         self.assertFalse(multiworld.get_unfilled_locations())
         self.assertTrue(multiworld.can_beat_game())

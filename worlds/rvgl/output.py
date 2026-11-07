@@ -133,7 +133,10 @@ def _build_archipelago_config(world: RVGLWorld) -> dict[str, Any]:
             for event_key, location_id in EVENT_KEY_TO_LOCATION_ID.items()
             if location_id in active_location_ids
         },
-        "items": {get_archipelago_item_name(item.source): item.id for item in ITEM_DATA},
+        "items": {
+            get_archipelago_item_name(item.source) if item.source is not None else f"filler:{item.name}": item.id
+            for item in ITEM_DATA
+        },
         "goal": world.options.goal.current_key,
         "goalEventKeys": list(world.get_goal_event_keys()),
     }
