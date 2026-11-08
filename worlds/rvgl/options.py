@@ -46,6 +46,20 @@ class LogicDifficulty(Choice):
     default = option_standard
 
 
+class CarDistribution(Choice):
+    """Choose how car unlocks are distributed through the multiworld.
+
+    Progressive: Attempts to place car items in locations according to their car rating, so that
+        early-game cars are accessible in earlier logical spheres than late-game cars.
+    Shuffle: Car items are placed using normal random item placement.
+        Late-game cars may be available in early spheres.
+    """
+    display_name = "Car Distribution"
+    option_progressive = 0
+    option_shuffle = 1
+    default = option_progressive
+
+
 class StartingCars(Range):
     """Number of Rookie cars randomly granted at the start.
 
@@ -141,6 +155,7 @@ class RVGLOptions(PerGameCommonOptions):
     """RVGL-specific options and Archipelago's common settings."""
     goal: Goal
     logic_difficulty: LogicDifficulty
+    car_distribution: CarDistribution
     starting_cars: StartingCars
     starting_tracks: StartingTracks
     include_dreamcast_cars: IncludeDreamcastCars
@@ -156,7 +171,7 @@ class RVGLOptions(PerGameCommonOptions):
 
 option_groups = [
     OptionGroup("Goal Options", [Goal]),
-    OptionGroup("Logic Options", [LogicDifficulty]),
+    OptionGroup("Logic Options", [LogicDifficulty, CarDistribution]),
     OptionGroup("Starting Content Options", [StartingCars, StartingTracks]),
     OptionGroup("Item Pool Options", [IncludeDreamcastCars, IncludeDreamcastTrackRooftops]),
     OptionGroup("Location Pool Options", [

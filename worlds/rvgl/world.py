@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from BaseClasses import ItemClassification
+from BaseClasses import CollectionState, Item, ItemClassification, Location, MultiWorld
 from Options import OptionError
 from worlds.AutoWorld import World
 
-from . import items, locations, output, regions, rules, web_world
+from . import car_chains, items, locations, output, regions, rules, web_world
 from .cars import DC_CARS, STOCK_CARS, CarData
 from .cups import STOCK_CUPS
-from .options import Goal, LogicDifficulty, RVGLOptions
+from .options import CarDistribution, Goal, LogicDifficulty, RVGLOptions
 from .tracks import DC_TRACKS, STOCK_TRACKS, TrackData
 
 _ITEM_DATA_BY_NAME = {
@@ -37,6 +37,7 @@ class RVGLWorld(World):
     location_name_to_id = locations.LOCATION_NAME_TO_ID
 
     goal_cup = next(cup for cup in STOCK_CUPS if cup.folder == "platinum")
+    car_chains: tuple[tuple[items.RVGLItem, ...], ...] = ()
 
     def generate_early(self) -> None:
         """Grant the initial cars, tracks, and cup using this world's seeded random generator."""
@@ -115,6 +116,37 @@ class RVGLWorld(World):
 
         itempool.extend(self.create_filler() for _ in range(location_count - len(itempool)))
         self.multiworld.itempool.extend(itempool)
+
+    def fill_hook(
+        self,
+        progitempool: list[Item],
+        usefulitempool: list[Item],
+        filleritempool: list[Item],
+        fill_locations: list[Location],
+    ) -> None:
+        if self.options.car_distribution == CarDistribution.option_progressive:
+            car_chains.prepare_car_chains(self, progitempool)
+
+    def collect_item(self, state: CollectionState, item: Item, remove: bool = False) -> str | None:
+        if isinstance(item, car_chains.CarChainItem):
+            if remove:
+                # Remove the last stage this simulated inventory owns.
+                for car in reversed(item.cars):
+                    if state.has(car.name, self.player):
+                        return car.name
+            else:
+                # Grant the first stage this simulated inventory does not own yet.
+                for car in item.cars:
+                    if not state.has(car.name, self.player):
+                        return car.name
+            return None
+        return super().collect_item(state, item, remove)
+
+    @classmethod
+    def stage_finalize_multiworld(cls, multiworld: MultiWorld) -> None:
+        if any(world.options.car_distribution == CarDistribution.option_progressive
+               for world in multiworld.get_game_worlds(cls.game)):
+            car_chains.resolve_car_chains(multiworld)
 
     def get_enabled_item_data(self) -> tuple[items.ItemData, ...]:
         """Return the item definitions enabled by this player's item-pool options."""
