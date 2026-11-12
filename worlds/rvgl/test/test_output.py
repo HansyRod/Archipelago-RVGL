@@ -1,10 +1,12 @@
 import json
 import tempfile
 import unittest
+from copy import deepcopy
 from itertools import product
 from pathlib import Path
 from unittest.mock import patch
 
+from Options import PlandoItem
 from test.general import setup_multiworld
 from Utils import Version
 
@@ -27,6 +29,49 @@ from ..tracks import DC_TRACKS, STOCK_TRACKS
 
 
 class TestOutput(unittest.TestCase):
+    def test_yaml_options_include_resolved_game_and_common_settings(self) -> None:
+        multiworld = setup_multiworld([RVGLWorld, RVGLWorld], seed=0, options=[
+            {"logic_difficulty": "expert", "car_distribution": "shuffle", "starting_cars": 2,
+             "include_dreamcast_cars": True, "include_mirror_time_trials": False,
+             "accessibility": "minimal", "progression_balancing": 35},
+            {"logic_difficulty": "casual", "starting_cars": 4},
+        ])
+        world = multiworld.worlds[1]
+        car_names = [get_car_item_name(car) for car in STOCK_CARS[:2]]
+        world.options.local_items.value = set(car_names)
+        world.options.start_inventory.value = {car_names[0]: 2}
+        world.options.item_links.value = [{"name": "Shared Cars", "item_pool": set(car_names),
+                                           "replacement_item": None, "link_replacement": False}]
+        world.options.plando_items.value = [PlandoItem(
+            items={car_names[0]: 1}, locations=["Bronze Cup Win"], world={2, 1}, count=1,
+        )]
+        before = deepcopy(world.options)
+        config = build_randomizer_config(world)
+        exported = json.loads(json.dumps(config))["archipelago"]["yamlOptions"]
+        self.assertEqual(set(exported), set(RVGLWorld.options_dataclass.type_hints))
+        self.assertEqual(exported["logic_difficulty"], "expert")
+        self.assertEqual(exported["car_distribution"], "shuffle")
+        self.assertEqual(exported["starting_cars"], 2)
+        self.assertIs(exported["include_dreamcast_cars"], True)
+        self.assertIs(exported["include_mirror_time_trials"], False)
+        self.assertEqual(exported["carsanity"], "disabled")
+        self.assertEqual(exported["accessibility"], "minimal")
+        self.assertEqual(exported["progression_balancing"], 35)
+        self.assertEqual(exported["local_items"], sorted(car_names))
+        self.assertEqual(exported["start_inventory"], {car_names[0]: 2})
+        self.assertEqual(exported["item_links"], [{"name": "Shared Cars", "item_pool": sorted(car_names),
+                                                  "replacement_item": None, "link_replacement": False}])
+        self.assertEqual(exported["plando_items"], [{
+            "items": {car_names[0]: 1}, "locations": ["Bronze Cup Win"], "world": [1, 2],
+            "from_pool": True, "force": "silent", "count": 1, "percentage": 100,
+        }])
+        self.assertEqual(world.options, before)
+        self.assertEqual(build_randomizer_config(world), config)
+        other = build_randomizer_config(multiworld.worlds[2])["archipelago"]["yamlOptions"]
+        self.assertEqual(other["logic_difficulty"], "casual")
+        self.assertEqual(other["starting_cars"], 4)
+        self.assertEqual(other["plando_items"], [])
+
     def test_export_uses_manifest_world_version(self) -> None:
         multiworld = setup_multiworld(RVGLWorld, seed=0)
         world = multiworld.worlds[1]
@@ -125,6 +170,7 @@ class TestOutput(unittest.TestCase):
                 archipelago = config["archipelago"]
                 self.assertEqual(set(archipelago), {
                     "worldVersion", "slotNumber", "slotName", "carsanity", "locations", "items", "goal", "goalEventKeys",
+                    "yamlOptions",
                 })
                 self.assertEqual(archipelago["worldVersion"], world.world_version.as_simple_string())
                 self.assertEqual(archipelago["slotNumber"], player)
@@ -321,6 +367,8 @@ class TestOutput(unittest.TestCase):
                 self.assertEqual(archipelago["worldVersion"], world.world_version.as_simple_string())
                 self.assertNotIn("goalEventKey", archipelago)
                 self.assertIs(archipelago["carsanity"], settings["carsanity"] == "enabled" or settings["goal"] == "carsanity")
+                for name, value in settings.items():
+                    self.assertEqual(archipelago["yamlOptions"][name], value)
                 active_ids = {location.address for location in world.get_locations() if location.address is not None}
                 for event_key in expected_keys:
                     location_id = archipelago["locations"][event_key]

@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import hashlib
 import json
+from dataclasses import asdict, is_dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+
+from Options import Choice, Toggle
 
 from .cars import DC_CARS, STOCK_CARS, CarData
 from .cups import STOCK_CUPS, CupData
@@ -117,6 +120,33 @@ def _build_cup_config(cup: CupData, include_dreamcast_track_rooftops: bool) -> d
     }
 
 
+def _serialize_option_value(value: Any) -> Any:
+    """Normalize nested common options, including plando dataclasses, for JSON."""
+    if is_dataclass(value):
+        return _serialize_option_value(asdict(value))
+    if isinstance(value, dict):
+        return {key: _serialize_option_value(entry) for key, entry in value.items()}
+    if isinstance(value, (set, frozenset)):
+        return [_serialize_option_value(entry) for entry in sorted(value)]
+    if isinstance(value, (list, tuple)):
+        return [_serialize_option_value(entry) for entry in value]
+    return value
+
+
+def _build_yaml_options(world: RVGLWorld) -> dict[str, Any]:
+    """Export resolved YAML settings without replacing them with goal overrides."""
+    result = {}
+    for name in world.options_dataclass.type_hints:
+        option = getattr(world.options, name)
+        if isinstance(option, Toggle):
+            result[name] = bool(option)
+        elif isinstance(option, Choice):
+            result[name] = option.current_key
+        else:
+            result[name] = _serialize_option_value(option.value)
+    return result
+
+
 def _build_archipelago_config(world: RVGLWorld) -> dict[str, Any]:
     # regions.py already determines which locations exist for this player.
     # Export only their event-key mappings to the DLL's JSON, skipping internal
@@ -138,6 +168,7 @@ def _build_archipelago_config(world: RVGLWorld) -> dict[str, Any]:
         },
         "goal": world.options.goal.current_key,
         "goalEventKeys": list(world.get_goal_event_keys()),
+        "yamlOptions": _build_yaml_options(world),
     }
 
 
