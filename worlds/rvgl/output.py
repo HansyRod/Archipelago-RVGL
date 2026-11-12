@@ -3,7 +3,9 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import asdict, is_dataclass
+from datetime import UTC, datetime
 from pathlib import Path
+from time import time_ns
 from typing import TYPE_CHECKING, Any
 
 from Options import Choice, Toggle
@@ -176,12 +178,15 @@ def build_randomizer_config(world: RVGLWorld) -> dict[str, Any]:
     """Build the DLL config and AP mappings without changing the generated content or AP state."""
     profile_identity = f"{world.multiworld.seed_name}:{world.player}"
     profile_name = "ap_" + hashlib.sha256(profile_identity.encode("utf-8")).hexdigest()[:12]
+    seconds, nanoseconds = divmod(time_ns(), 1_000_000_000)
+    generated_at = datetime.fromtimestamp(seconds, UTC)
 
     return {
         "metadata": {
             "seed": world.multiworld.seed_name,
             "version": RANDOMIZER_CONFIG_VERSION,
             "profileName": profile_name,
+            "generatedAt": generated_at.strftime("%Y-%m-%dT%H:%M:%S") + f".{nanoseconds:09d}+00:00",
         },
         "global_options": {
             "load_extra_cars": False,

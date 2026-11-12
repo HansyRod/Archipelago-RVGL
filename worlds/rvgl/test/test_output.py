@@ -29,7 +29,8 @@ from ..tracks import DC_TRACKS, STOCK_TRACKS
 
 
 class TestOutput(unittest.TestCase):
-    def test_yaml_options_include_resolved_game_and_common_settings(self) -> None:
+    @patch("worlds.rvgl.output.time_ns", return_value=1_792_833_654_681_395_400)
+    def test_yaml_options_include_resolved_game_and_common_settings(self, mock_time_ns) -> None:
         multiworld = setup_multiworld([RVGLWorld, RVGLWorld], seed=0, options=[
             {"logic_difficulty": "expert", "car_distribution": "shuffle", "starting_cars": 2,
              "include_dreamcast_cars": True, "include_mirror_time_trials": False,
@@ -376,7 +377,8 @@ class TestOutput(unittest.TestCase):
                     self.assertIn(location_id, active_ids, event_key)
                 self.assertEqual(world.options.carsanity.current_key, settings["carsanity"])
 
-    def test_output_is_reproducible_and_scoped_to_each_player(self) -> None:
+    @patch("worlds.rvgl.output.time_ns", return_value=1_792_833_654_681_395_400)
+    def test_output_is_reproducible_and_scoped_to_each_player(self, mock_time_ns) -> None:
         multiworld = setup_multiworld(
             [RVGLWorld] * 4, seed=0,
             options=[{"goal": "platinum_cup"}, {"goal": "carsanity", "include_dreamcast_cars": True},
@@ -391,6 +393,7 @@ class TestOutput(unittest.TestCase):
                 path = Path(directory) / (multiworld.get_out_file_name_base(player) + ".rvgl.json")
                 contents = path.read_bytes()
                 config = json.loads(contents)
+                self.assertEqual(config["metadata"]["generatedAt"], "2026-10-24T09:20:54.681395400+00:00")
                 self.assertEqual(config, build_randomizer_config(world))
                 self.assertEqual(config["archipelago"]["goal"], world.options.goal.current_key)
                 self.assertEqual(config["archipelago"]["goalEventKeys"], list(world.get_goal_event_keys()))
