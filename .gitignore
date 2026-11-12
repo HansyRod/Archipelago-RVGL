@@ -199,3 +199,9 @@ _speedups.html
 .LSOverride
 Thumbs.db
 [Dd]esktop.ini
+
+# RVGL ignores
+/worlds/yayarg
+/fuzz_output
+fuzz.py
+/hooks
