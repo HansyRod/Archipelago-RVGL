@@ -3,8 +3,10 @@ import tempfile
 import unittest
 from itertools import product
 from pathlib import Path
+from unittest.mock import patch
 
 from test.general import setup_multiworld
+from Utils import Version
 
 from .. import RVGLWorld
 from ..cars import DC_CARS, STOCK_CARS, CarData
@@ -25,6 +27,18 @@ from ..tracks import DC_TRACKS, STOCK_TRACKS
 
 
 class TestOutput(unittest.TestCase):
+    def test_export_uses_manifest_world_version(self) -> None:
+        multiworld = setup_multiworld(RVGLWorld, seed=0)
+        world = multiworld.worlds[1]
+        config = build_randomizer_config(world)
+        self.assertEqual(config["archipelago"]["worldVersion"], world.manifest["world_version"])
+        self.assertNotIn("schemaVersion", config["archipelago"])
+        for version in (Version(0, 1, 0), Version(0, 1, 7), Version(1, 0, 0)):
+            with self.subTest(version=version), patch.object(RVGLWorld, "world_version", version):
+                config = build_randomizer_config(world)
+                self.assertEqual(config["archipelago"]["worldVersion"], version.as_simple_string())
+                self.assertEqual(config["metadata"]["version"], "0.3.0")
+
     def test_config_preserves_content_and_starting_unlocks(self) -> None:
         multiworld = setup_multiworld(RVGLWorld, seed=0)
         config = build_randomizer_config(multiworld.worlds[1])
@@ -32,7 +46,7 @@ class TestOutput(unittest.TestCase):
             "metadata", "global_options", "stockCars", "dcCars", "extraCars", "tracks", "cups", "archipelago",
         })
         self.assertEqual(config["metadata"]["seed"], multiworld.seed_name)
-        self.assertEqual(config["metadata"]["version"], "0.2.0")
+        self.assertEqual(config["metadata"]["version"], "0.3.0")
         self.assertRegex(config["metadata"]["profileName"], r"^ap_[0-9a-f]{12}$")
         self.assertTrue(config["global_options"]["is_stock_cars"])
         self.assertTrue(config["global_options"]["is_stock_tracks"])
@@ -110,9 +124,9 @@ class TestOutput(unittest.TestCase):
                 config = build_randomizer_config(world)
                 archipelago = config["archipelago"]
                 self.assertEqual(set(archipelago), {
-                    "schemaVersion", "slotNumber", "slotName", "carsanity", "locations", "items", "goal", "goalEventKeys",
+                    "worldVersion", "slotNumber", "slotName", "carsanity", "locations", "items", "goal", "goalEventKeys",
                 })
-                self.assertEqual(archipelago["schemaVersion"], 1)
+                self.assertEqual(archipelago["worldVersion"], world.world_version.as_simple_string())
                 self.assertEqual(archipelago["slotNumber"], player)
                 self.assertEqual(archipelago["slotName"], world.player_name)
                 self.assertIs(archipelago["carsanity"], False)
@@ -304,7 +318,7 @@ class TestOutput(unittest.TestCase):
                     expected_keys = [f"{event_type}:{track.folder}" for track in tracks for event_type in event_types]
                 expected_goal_data = {"goal": settings["goal"], "goalEventKeys": expected_keys}
                 self.assertEqual({key: archipelago[key] for key in expected_goal_data}, expected_goal_data)
-                self.assertEqual(archipelago["schemaVersion"], 1)
+                self.assertEqual(archipelago["worldVersion"], world.world_version.as_simple_string())
                 self.assertNotIn("goalEventKey", archipelago)
                 self.assertIs(archipelago["carsanity"], settings["carsanity"] == "enabled" or settings["goal"] == "carsanity")
                 active_ids = {location.address for location in world.get_locations() if location.address is not None}

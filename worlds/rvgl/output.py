@@ -15,8 +15,7 @@ if TYPE_CHECKING:
     from .world import RVGLWorld
 
 
-RANDOMIZER_CONFIG_VERSION = "0.2.0"
-ARCHIPELAGO_SCHEMA_VERSION = 1
+RANDOMIZER_CONFIG_VERSION = "0.3.0"
 
 # The DLL uses positional track slots, including Rooftops at index 4.
 TRACK_SLOTS = (*STOCK_TRACKS[:4], *DC_TRACKS, *STOCK_TRACKS[4:])
@@ -124,7 +123,7 @@ def _build_archipelago_config(world: RVGLWorld) -> dict[str, Any]:
     # events such as Victory, whose address is None because they have no network ID.
     active_location_ids = {location.address for location in world.get_locations() if location.address is not None}
     return {
-        "schemaVersion": ARCHIPELAGO_SCHEMA_VERSION,
+        "worldVersion": world.world_version.as_simple_string(),
         "slotNumber": world.player,
         "slotName": world.player_name,
         "carsanity": world.is_carsanity_enabled(),
