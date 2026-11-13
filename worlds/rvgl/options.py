@@ -26,13 +26,13 @@ class LogicDifficulty(Choice):
     The exact requirements for each difficulty depend on the check type, but in general:
 
     Casual: Requires a car of a superior rating to make the check in logic.
-        Example: Bronze Cup requires at least an Amateur car to be in logic.
+        Example: Silver Cup requires at least an Advanced car to be in logic.
 
     Standard: Requires a car of the same rating to make the check in logic.
         Example: Silver Cup requires at least an Amateur car to be in logic.
 
     Expert: Requires a car of a rating below to make the check in logic.
-        Example: Gold Cup requires at least an Amateur car to be in logic.
+        Example: Silver Cup requires at least a Rookie car to be in logic.
 
     Additional effects of logic difficulty:
     - Casual logic grants one of the following starting cars:
