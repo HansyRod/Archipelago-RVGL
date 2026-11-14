@@ -8,6 +8,7 @@ from . import car_chains, items, locations, output, regions, rules, web_world
 from .cars import DC_CARS, STOCK_CARS, CarData
 from .cups import STOCK_CUPS
 from .options import CarDistribution, Goal, LogicDifficulty, RVGLOptions
+from .stunt_arena import STOCK_STUNT_ARENA
 from .tracks import DC_TRACKS, STOCK_TRACKS, TrackData
 
 _ITEM_DATA_BY_NAME = {
@@ -97,11 +98,9 @@ class RVGLWorld(World):
 
     def create_items(self) -> None:
         """Create each remaining unlock once and fill the unused reward slots with filler."""
-        starting_item_names = {item.name for item in self.multiworld.precollected_items[self.player]}
         itempool = [
             self.create_item(item.name)
-            for item in self.get_enabled_item_data()
-            if item.classification != ItemClassification.filler and item.name not in starting_item_names
+            for item in self.get_remaining_item_data()
         ]
 
         location_count = len(self.multiworld.get_unfilled_locations(self.player))
@@ -158,6 +157,33 @@ class RVGLWorld(World):
                 or item.source in enabled_tracks
                 or item.source in STOCK_CUPS
                 or item.classification == ItemClassification.filler)
+        )
+
+    def get_remaining_item_data(self) -> tuple[items.ItemData, ...]:
+        """Return uncollected unlock definitions; use after starting inventory has been applied."""
+        starting_item_names = {item.name for item in self.multiworld.precollected_items[self.player]}
+        return tuple(
+            item for item in self.get_enabled_item_data()
+            if item.classification != ItemClassification.filler and item.name not in starting_item_names
+        )
+
+    def get_enabled_location_data(self) -> tuple[locations.LocationData, ...]:
+        """Return network check definitions in catalogue order without creating regions or events."""
+        enabled_sources = (*self.get_enabled_cars(), *self.get_enabled_tracks(), *STOCK_CUPS, STOCK_STUNT_ARENA)
+        enabled_location_types = {
+            "car_race_win": self.is_carsanity_enabled(),
+            "single_race_win": self.is_single_race_wins_enabled(),
+            "practice_star": self.is_practice_stars_enabled(),
+            "time_trial_normal": self.is_normal_time_trials_enabled(),
+            "time_trial_reverse": self.options.include_reverse_time_trials,
+            "time_trial_mirror": self.options.include_mirror_time_trials,
+            "championship_win": True,
+            "stunt_star": self.options.include_stunt_arena_stars,
+        }
+        # location.event_key.partition(":")[0] extracts the location type name before the colon.
+        return tuple(
+            location for location in locations.LOCATION_DATA
+            if location.source in enabled_sources and enabled_location_types[location.event_key.partition(":")[0]]
         )
 
     def get_enabled_cars(self) -> tuple[CarData, ...]:

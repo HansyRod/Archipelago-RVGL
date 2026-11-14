@@ -7,7 +7,7 @@ from BaseClasses import Region
 from .cars import CarData
 from .cups import STOCK_CUPS, CupData
 from .items import RVGLItem
-from .locations import LOCATION_DATA, RVGLLocation
+from .locations import LocationData, RVGLLocation
 from .stunt_arena import STOCK_STUNT_ARENA, StuntArenaData
 from .tracks import TrackData
 
@@ -33,21 +33,22 @@ def create_regions(world: RVGLWorld) -> None:
     Create regions for enabled cars only when Carsanity is enabled.
     Goals can enable their required check categories independently of location options.
     """
+    enabled_location_data = world.get_enabled_location_data()
     menu = Region("Menu", world.player, world.multiworld)
     world.multiworld.regions.append(menu)
 
     if world.is_carsanity_enabled():
         for car in world.get_enabled_cars():
-            _create_content_region(world, menu, get_car_region_name(car), car)
+            _create_content_region(world, menu, get_car_region_name(car), car, enabled_location_data)
 
     for track in world.get_enabled_tracks():
-        _create_content_region(world, menu, get_track_region_name(track), track)
+        _create_content_region(world, menu, get_track_region_name(track), track, enabled_location_data)
 
     for cup in STOCK_CUPS:
-        _create_content_region(world, menu, get_cup_region_name(cup), cup)
+        _create_content_region(world, menu, get_cup_region_name(cup), cup, enabled_location_data)
 
     if world.options.include_stunt_arena_stars:
-        _create_content_region(world, menu, STOCK_STUNT_ARENA.display_name, STOCK_STUNT_ARENA)
+        _create_content_region(world, menu, STOCK_STUNT_ARENA.display_name, STOCK_STUNT_ARENA, enabled_location_data)
 
     goal_region = menu
     goal_region.add_event("Victory", location_type=RVGLLocation, item_type=RVGLItem)
@@ -58,25 +59,15 @@ def _create_content_region(
     menu: Region,
     region_name: str,
     source: CarData | TrackData | CupData | StuntArenaData,
+    enabled_location_data: tuple[LocationData, ...],
 ) -> None:
     region = Region(region_name, world.player, world.multiworld)
     world.multiworld.regions.append(region)
 
-    enabled_location_types = {
-        "car_race_win": world.is_carsanity_enabled(),
-        "single_race_win": world.is_single_race_wins_enabled(),
-        "practice_star": world.is_practice_stars_enabled(),
-        "time_trial_normal": world.is_normal_time_trials_enabled(),
-        "time_trial_reverse": world.options.include_reverse_time_trials,
-        "time_trial_mirror": world.options.include_mirror_time_trials,
-        "championship_win": True,
-        "stunt_star": world.options.include_stunt_arena_stars,
-    }
-    # location.event_key.partition(":")[0] extracts the location type name before the colon.
     region.add_locations({
         location.name: location.id
-        for location in LOCATION_DATA
-        if location.source == source and enabled_location_types[location.event_key.partition(":")[0]]
+        for location in enabled_location_data
+        if location.source == source
     }, RVGLLocation)
 
     # Access requirements are applied separately in rules.py.

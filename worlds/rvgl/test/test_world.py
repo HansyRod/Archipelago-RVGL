@@ -240,12 +240,15 @@ class TestGoalRules(unittest.TestCase):
             ("platinum_cup", "carsanity", "tracksanity", "tracksanity_plus"), (False, True), (False, True),
         ):
             with self.subTest(goal=goal, cars=cars, rooftops=rooftops):
-                world = setup_multiworld(RVGLWorld, steps=("create_regions", "set_rules"), seed=0, options={
+                world = setup_multiworld(RVGLWorld, steps=(), seed=0, options={
                     **disabled_options, "goal": goal, "include_dreamcast_cars": cars,
                     "include_dreamcast_track_rooftops": rooftops,
                 }).worlds[1]
                 required_ids = {location.id for location in world.get_goal_location_data()}
                 cup_ids = {location.id for location in LOCATION_DATA if isinstance(location.source, CupData)}
+                self.assertEqual({location.id for location in world.get_enabled_location_data()}, required_ids | cup_ids)
+                world.create_regions()
+                world.set_rules()
                 active_ids = {location.address for location in world.get_locations() if location.address is not None}
                 self.assertEqual(active_ids, required_ids | cup_ids)
                 self.assertEqual(
@@ -571,6 +574,28 @@ class TestStuntArena(unittest.TestCase):
 
 
 class TestLocationPoolOptions(unittest.TestCase):
+    def test_remaining_unlock_counts_use_each_players_applied_starting_inventory(self) -> None:
+        multiworld = setup_multiworld([RVGLWorld, RVGLWorld], steps=("generate_early",), seed=0, options=[
+            {"start_inventory": {"Car: Toyeca": 2, "Track: Ghost Town 2": 1, "Car: BigVolt": 1}},
+            {"include_dreamcast_cars": True, "include_dreamcast_track_rooftops": True,
+             "start_inventory": {"Car: Toyeca": 2, "Track: Ghost Town 2": 1}},
+        ])
+        for player, world in multiworld.worlds.items():
+            with self.subTest(player=player):
+                self.assertEqual(len(world.get_remaining_item_data()), 40 if player == 1 else 55)
+                # Match Main.py: apply start_inventory after generate_early and before creating regions.
+                for item_name, count in world.options.start_inventory.value.items():
+                    for _ in range(count):
+                        world.push_precollected(world.create_item(item_name))
+                random_state = world.random.getstate()
+                remaining = world.get_remaining_item_data()
+                self.assertEqual(len(remaining), 38 if player == 1 else 53)
+                self.assertTrue(all(item.classification != ItemClassification.filler for item in remaining))
+                self.assertFalse({"Car: Toyeca", "Track: Ghost Town 2"}.intersection(item.name for item in remaining))
+                self.assertEqual(world.random.getstate(), random_state)
+        self.assertFalse(multiworld.get_regions())
+        self.assertFalse(multiworld.itempool)
+
     def test_location_option_combinations_preserve_catalogue_and_balance(self) -> None:
         location_options = {
             "include_single_race_wins": "single_race_win:",
@@ -590,7 +615,7 @@ class TestLocationPoolOptions(unittest.TestCase):
             options["carsanity"] = int(options["carsanity"])
             with self.subTest(options=options):
                 multiworld = setup_multiworld(
-                    RVGLWorld, steps=("generate_early", "create_regions"), seed=0, options=options,
+                    RVGLWorld, steps=("generate_early",), seed=0, options=options,
                 )
                 world = multiworld.worlds[1]
                 expected_ids = {
@@ -601,6 +626,14 @@ class TestLocationPoolOptions(unittest.TestCase):
                          or any(options[key] and location.event_key.startswith(prefix)
                                 for key, prefix in location_options.items()))
                 }
+                random_state = world.random.getstate()
+                enabled_location_data = world.get_enabled_location_data()
+                self.assertEqual({location.id for location in enabled_location_data}, expected_ids)
+                self.assertEqual(len(enabled_location_data), len(expected_ids))
+                self.assertEqual(world.random.getstate(), random_state)
+                self.assertFalse(world.get_regions())
+                self.assertFalse(multiworld.itempool)
+                world.create_regions()
                 self.assertEqual(
                     {location.address for location in world.get_locations() if location.address is not None},
                     expected_ids,
@@ -612,6 +645,7 @@ class TestLocationPoolOptions(unittest.TestCase):
                     and (options["include_dreamcast_cars"] or item.source not in DC_CARS)
                     and (options["include_dreamcast_track_rooftops"] or item.source not in DC_TRACKS)
                 } - starting_names
+                self.assertEqual({item.name for item in world.get_remaining_item_data()}, unlock_names)
                 if len(unlock_names) > len(expected_ids):
                     with self.assertRaisesRegex(
                         OptionError,
