@@ -29,7 +29,6 @@ Players always start with:
 - At least one available car
 - At least one available track
 - Access to the Bronze Cup championship
-- Access to the Stunt Arena
 
 Extra cars, tracks and cups are unlocked by players in the multiworld completing location checks, instead of using their original unlock rules.
 
@@ -54,7 +53,9 @@ This includes:
 - Beating time trials in Normal, Reverse, and Mirror versions of a track
 - Collecting stars in the Stunt Arena
 
-Championship locations are mandatory; all other activities are optional, but the player must always choose some of them to have enough locations to play in Archipelago. Some activities are also required for some goals (Tracksanity and Tracksanity Plus). Selecting a goal will automatically enable the required locations.
+Championship locations are mandatory; all other activities are optional.
+
+Some activities are also required for some goals (Tracksanity and Tracksanity Plus). Selecting a goal will automatically enable the required locations.
 
 Additionally, Carsanity mode adds location checks to winning single races with each car. These locations can be added even if the Carsanity goal is not chosen.
 
