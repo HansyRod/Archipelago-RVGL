@@ -63,7 +63,7 @@ You will need to do these steps the first time you play using RVGL Randomizer.
 
 You will need to do these steps when starting a new multiworld game.
 
-1. In the "Import" screen, click the "Load Archipelago JSON" button.
+1. In the "Import" screen, click the "Load Archipelago File" button.
 2. Select the `.aprvgl` file obtained in the [Multiworld Generation Output](#multiworld-generation-output) step.
 
 ### Launch RVGL and Connect to Archipelago
