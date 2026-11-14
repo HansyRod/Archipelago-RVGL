@@ -31,6 +31,24 @@ from ..tracks import DC_TRACKS, STOCK_TRACKS
 
 
 class TestOutput(unittest.TestCase):
+    def test_starting_content_repairs_are_exported_per_player(self) -> None:
+        multiworld = setup_multiworld([RVGLWorld] * 3, steps=("generate_early",), seed=0, options=[
+            {"starting_cars": 0, "starting_tracks": 0},
+            {"starting_cars": 0, "starting_tracks": 0,
+             "start_inventory": {"Car: Toyeca": 1, "Track: Ghost Town 2": 1}},
+            {},
+        ])
+        for world, expected in zip(multiworld.worlds.values(), ((1, 1), (0, 0), (3, 1))):
+            with self.subTest(player=world.player):
+                # Match Main.py's timing for explicit starting inventory.
+                for item_name, count in world.options.start_inventory.value.items():
+                    for _ in range(count):
+                        world.push_precollected(world.create_item(item_name))
+                world.create_regions()
+                exported = build_randomizer_config(world)["archipelago"]["yamlOptions"]
+                self.assertEqual((exported["starting_cars"], exported["starting_tracks"]), expected)
+                self.assertEqual(exported["start_inventory"], world.options.start_inventory.value)
+
     def test_capacity_repairs_are_exported_with_the_created_location_mappings(self) -> None:
         location_options = (
             "include_single_race_wins", "include_practice_stars", "include_normal_time_trials",

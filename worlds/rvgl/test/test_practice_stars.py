@@ -190,7 +190,7 @@ class TestCasualStartingCars(unittest.TestCase):
                               self.casual_car_names | ({"Car: BigVolt"} if dreamcast else set()))
                 self.assertTrue(starters <= {get_car_item_name(car)
                                              for car in multiworld.worlds[1].get_enabled_cars() if car.rating == 0})
-                self.assertEqual(multiworld.worlds[1].options.starting_cars.value, count)
+                self.assertEqual(multiworld.worlds[1].options.starting_cars.value, max(1, count))
                 if count == 1:
                     selected_cars[dreamcast].update(starters)
         self.assertEqual(selected_cars[False], self.casual_car_names)
