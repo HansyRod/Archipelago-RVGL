@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import zipfile
 from dataclasses import asdict, is_dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -9,6 +10,7 @@ from time import time_ns
 from typing import TYPE_CHECKING, Any
 
 from Options import Choice, Toggle
+from worlds.Files import APPlayerContainer
 
 from .cars import DC_CARS, STOCK_CARS, CarData
 from .cups import STOCK_CUPS, CupData
@@ -21,6 +23,26 @@ if TYPE_CHECKING:
 
 
 RANDOMIZER_CONFIG_VERSION = "0.3.0"
+
+
+class RVGLContainer(APPlayerContainer):
+    """Package the randomizer config for Archipelago's per-player downloads."""
+
+    game = "RVGL"
+    patch_file_ending = ".aprvgl"
+
+    def __init__(self, path: str, player: int, player_name: str,
+                 config_filename: str, config: dict[str, Any]):
+        super().__init__(path, player, player_name)
+        self.config_filename = config_filename
+        self.config = config
+
+    def write_contents(self, opened_zipfile: zipfile.ZipFile) -> None:
+        super().write_contents(opened_zipfile)
+        opened_zipfile.writestr(
+            self.config_filename, json.dumps(self.config, indent=2, ensure_ascii=False) + "\n",
+        )
+
 
 # The DLL uses positional track slots, including Rooftops at index 4.
 TRACK_SLOTS = (*STOCK_TRACKS[:4], *DC_TRACKS, *STOCK_TRACKS[4:])
@@ -213,8 +235,8 @@ def build_randomizer_config(world: RVGLWorld) -> dict[str, Any]:
 
 
 def generate_output(world: RVGLWorld, output_directory: str) -> None:
-    filename = world.multiworld.get_out_file_name_base(world.player) + ".rvgl.json"
-    path = Path(output_directory) / filename
-    with path.open("w", encoding="utf-8", newline="\n") as output_file:
-        json.dump(build_randomizer_config(world), output_file, indent=2, ensure_ascii=False)
-        output_file.write("\n")
+    basename = world.multiworld.get_out_file_name_base(world.player)
+    filename = basename + ".rvgl.json"
+    path = Path(output_directory) / (basename + RVGLContainer.patch_file_ending)
+    output_file = RVGLContainer(str(path), world.player, world.player_name, filename, build_randomizer_config(world))
+    output_file.write()

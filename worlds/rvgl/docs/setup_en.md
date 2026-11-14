@@ -41,7 +41,10 @@ Both the RVGL APWorld and the YAML template are available on the [release page](
 
 ### Multiworld Generation Output
 
-When the multiworld is generated, the output will include one `.rvgl.json` file for each RVGL player. The file name includes the player's name provided in the YAML, to identify which player should use which file. Obtain this file from the multiworld creator before you start playing.
+When the multiworld is generated, the output will include one `.aprvgl` file for each RVGL player.
+
+- If your multiworld is hosted in an Archipelago server room, and uploaded as the full generated package, you can download your file from the room page.
+- If you cannot download your file, obtain it from the multiworld creator. The file name includes the player's name provided in the YAML, to identify which player should use which file.
 
 ## Playing RVGL in Archipelago Mode
 
@@ -61,7 +64,7 @@ You will need to do these steps the first time you play using RVGL Randomizer.
 You will need to do these steps when starting a new multiworld game.
 
 1. In the "Import" screen, click the "Load Archipelago JSON" button.
-2. Select the `.rvgl.json` file created in the [Multiworld Generation Output](#multiworld-generation-output) step.
+2. Select the `.aprvgl` file obtained in the [Multiworld Generation Output](#multiworld-generation-output) step.
 
 ### Launch RVGL and Connect to Archipelago
 

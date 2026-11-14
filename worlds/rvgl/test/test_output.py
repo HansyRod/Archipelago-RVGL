@@ -1,6 +1,7 @@
 import json
 import tempfile
 import unittest
+import zipfile
 from copy import deepcopy
 from itertools import product
 from pathlib import Path
@@ -9,6 +10,7 @@ from unittest.mock import patch
 from Options import PlandoItem
 from test.general import setup_multiworld
 from Utils import Version
+from worlds.Files import container_version, is_ap_player_container
 
 from .. import RVGLWorld
 from ..cars import DC_CARS, STOCK_CARS, CarData
@@ -390,8 +392,23 @@ class TestOutput(unittest.TestCase):
             for player, world in multiworld.worlds.items():
                 random_state = world.random.getstate()
                 world.generate_output(directory)
-                path = Path(directory) / (multiworld.get_out_file_name_base(player) + ".rvgl.json")
-                contents = path.read_bytes()
+                path = Path(directory) / (multiworld.get_out_file_name_base(player) + ".aprvgl")
+                filename = multiworld.get_out_file_name_base(player) + ".rvgl.json"
+                self.assertTrue(is_ap_player_container(world.game, path.read_bytes(), player))
+                self.assertFalse(is_ap_player_container(world.game, path.read_bytes(), player + 1))
+                with zipfile.ZipFile(path) as output_file:
+                    self.assertEqual(set(output_file.namelist()), {"archipelago.json", filename})
+                    manifest = output_file.read("archipelago.json")
+                    self.assertEqual(json.loads(manifest), {
+                        "compatible_version": 5,
+                        "version": container_version,
+                        "server": "",
+                        "player": player,
+                        "player_name": world.player_name,
+                        "game": "RVGL",
+                        "patch_file_ending": ".aprvgl",
+                    })
+                    contents = output_file.read(filename)
                 config = json.loads(contents)
                 self.assertEqual(config["metadata"]["generatedAt"], "2026-10-24T09:20:54.681395400+00:00")
                 self.assertEqual(config, build_randomizer_config(world))
@@ -400,7 +417,10 @@ class TestOutput(unittest.TestCase):
                 self.assertEqual(config["cups"][1]["obtainCondition"], 13)
                 profiles.add(config["metadata"]["profileName"])
                 world.generate_output(directory)
-                self.assertEqual(path.read_bytes(), contents)
+                with zipfile.ZipFile(path) as output_file:
+                    self.assertEqual(output_file.read(filename), contents)
+                    self.assertEqual(output_file.read("archipelago.json"), manifest)
                 self.assertEqual(world.random.getstate(), random_state)
-            self.assertEqual(len(list(Path(directory).glob("*.rvgl.json"))), len(multiworld.player_ids))
+            self.assertEqual(len(list(Path(directory).glob("*.aprvgl"))), len(multiworld.player_ids))
+            self.assertFalse(list(Path(directory).glob("*.rvgl.json")))
         self.assertEqual(len(profiles), len(multiworld.player_ids))
