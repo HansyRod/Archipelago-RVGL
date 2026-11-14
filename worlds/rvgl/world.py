@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 from BaseClasses import CollectionState, Item, ItemClassification, Location, MultiWorld
 from Options import OptionError
 from worlds.AutoWorld import World
@@ -91,7 +93,49 @@ class RVGLWorld(World):
             self.push_precollected(self.create_item(item_name))
 
     def create_regions(self) -> None:
+        self._ensure_location_capacity()
         regions.create_regions(self)
+
+    def _ensure_location_capacity(self) -> None:
+        """Enable additional check categories, in priority order, until all unlocks fit."""
+        item_count = len(self.get_remaining_item_data())
+        location_count = len(self.get_enabled_location_data())
+        initial_location_count = location_count
+        enabled_options = []
+        priority_groups = (
+            {
+                "include_single_race_wins": self.is_single_race_wins_enabled(),
+                "include_practice_stars": self.is_practice_stars_enabled(),
+                "include_normal_time_trials": self.is_normal_time_trials_enabled(),
+            },
+            {
+                "include_reverse_time_trials": bool(self.options.include_reverse_time_trials),
+                "include_mirror_time_trials": bool(self.options.include_mirror_time_trials),
+                "include_stunt_arena_stars": bool(self.options.include_stunt_arena_stars),
+                "carsanity": self.is_carsanity_enabled(),
+            },
+        )
+        for priority_group in priority_groups:
+            disabled_options = [name for name, enabled in priority_group.items() if not enabled]
+            while location_count < item_count and disabled_options:
+                option_name = self.random.choice(disabled_options)
+                disabled_options.remove(option_name)
+                getattr(self.options, option_name).value = 1
+                enabled_options.append(option_name)
+                location_count = len(self.get_enabled_location_data())
+
+        if location_count < item_count:
+            raise OptionError(
+                f"RVGL player {self.player} ({self.player_name}) has {item_count} unlock items "
+                f"but only {location_count} locations after enabling all Location Pool Options."
+            )
+        if enabled_options:
+            logging.warning(
+                "RVGL player %s (%s) had %s unlock items but only %s enabled locations "
+                "(%s more locations needed). Automatically enabled %s; now has %s locations.",
+                self.player, self.player_name, item_count, initial_location_count,
+                item_count - initial_location_count, ", ".join(enabled_options), location_count,
+            )
 
     def set_rules(self) -> None:
         rules.set_rules(self)

@@ -115,10 +115,11 @@ class TestCarLogicRules(unittest.TestCase):
     def test_time_trial_variants_respect_location_options_and_goal_forced_checks(self) -> None:
         for normal, reverse, mirror, goal in product((False, True), (False, True), (False, True),
                                                     ("platinum_cup", "tracksanity_plus")):
+            # Carsanity supplies enough capacity to isolate time-trial options from automatic expansion.
             world = setup_multiworld(RVGLWorld, steps=("create_regions", "set_rules"), seed=0, options={
                 "include_normal_time_trials": normal, "include_reverse_time_trials": reverse,
                 "include_mirror_time_trials": mirror, "include_practice_stars": False,
-                "include_dreamcast_track_rooftops": True, "goal": goal,
+                "include_dreamcast_track_rooftops": True, "goal": goal, "carsanity": "enabled",
             }).worlds[1]
             names = {location.name for location in world.get_locations()}
             state = CollectionState(world.multiworld)

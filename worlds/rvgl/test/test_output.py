@@ -31,6 +31,29 @@ from ..tracks import DC_TRACKS, STOCK_TRACKS
 
 
 class TestOutput(unittest.TestCase):
+    def test_capacity_repairs_are_exported_with_the_created_location_mappings(self) -> None:
+        location_options = (
+            "include_single_race_wins", "include_practice_stars", "include_normal_time_trials",
+            "include_reverse_time_trials", "include_mirror_time_trials", "include_stunt_arena_stars",
+        )
+        for seed in range(8):
+            with self.subTest(seed=seed):
+                multiworld = setup_multiworld(RVGLWorld, seed=seed, options={
+                    **dict.fromkeys(location_options, False), "carsanity": "disabled",
+                    "include_dreamcast_cars": True, "include_dreamcast_track_rooftops": True,
+                })
+                world = multiworld.worlds[1]
+                archipelago = build_randomizer_config(world)["archipelago"]
+                for name in location_options:
+                    self.assertIs(archipelago["yamlOptions"][name], bool(getattr(world.options, name)))
+                self.assertEqual(archipelago["yamlOptions"]["carsanity"], world.options.carsanity.current_key)
+                self.assertIs(archipelago["carsanity"], world.is_carsanity_enabled())
+                self.assertEqual(archipelago["locations"], {
+                    location.event_key: location.id for location in LOCATION_DATA
+                    if location.name in {check.name for check in world.get_locations() if check.address is not None}
+                })
+                self.assertGreaterEqual(len(archipelago["locations"]), len(world.get_remaining_item_data()))
+
     @patch("worlds.rvgl.output.time_ns", return_value=1_792_833_654_681_395_400)
     def test_yaml_options_include_resolved_game_and_common_settings(self, mock_time_ns) -> None:
         multiworld = setup_multiworld([RVGLWorld, RVGLWorld], seed=0, options=[
