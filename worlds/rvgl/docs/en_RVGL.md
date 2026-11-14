@@ -8,6 +8,14 @@ Control and race toy RC cars in everyday scenarios like a neighbourhood, superma
 
 The YAML template with detailed information on all options is available on the [release page](https://github.com/HansyRod/Archipelago-RVGL/releases).
 
+Options available include:
+
+- One of four victory goals to choose
+- Logic difficulty
+- Starting items
+- Which content to include in the item pool
+- Which location checks to include in the game
+
 ## How do I set up the game?
 
 See the [Setup Page](setup_en.md) for detailed information on how to set up the game.
