@@ -5,7 +5,6 @@ from unittest.mock import patch
 
 from BaseClasses import CollectionState, ItemClassification
 from Fill import distribute_items_restrictive
-from Options import OptionError
 from test import bases
 from test.general import setup_multiworld
 from worlds.AutoWorld import call_all
@@ -240,12 +239,18 @@ class TestGoalRules(unittest.TestCase):
             ("platinum_cup", "carsanity", "tracksanity", "tracksanity_plus"), (False, True), (False, True),
         ):
             with self.subTest(goal=goal, cars=cars, rooftops=rooftops):
-                world = setup_multiworld(RVGLWorld, steps=("create_regions", "set_rules"), seed=0, options={
+                world = setup_multiworld(RVGLWorld, steps=(), seed=0, options={
                     **disabled_options, "goal": goal, "include_dreamcast_cars": cars,
                     "include_dreamcast_track_rooftops": rooftops,
                 }).worlds[1]
                 required_ids = {location.id for location in world.get_goal_location_data()}
                 cup_ids = {location.id for location in LOCATION_DATA if isinstance(location.source, CupData)}
+                self.assertEqual({location.id for location in world.get_enabled_location_data()}, required_ids | cup_ids)
+                # Isolate goal overrides from capacity repair by precollecting every unlock.
+                for item in world.get_remaining_item_data():
+                    world.push_precollected(world.create_item(item.name))
+                world.create_regions()
+                world.set_rules()
                 active_ids = {location.address for location in world.get_locations() if location.address is not None}
                 self.assertEqual(active_ids, required_ids | cup_ids)
                 self.assertEqual(
@@ -331,18 +336,28 @@ class TestGoalRules(unittest.TestCase):
 
 
 class TestStartingCars(unittest.TestCase):
-    def test_zero_starting_cars_raises_option_error(self) -> None:
-        for goal, starting_inventory in product(
+    def test_zero_starting_cars_automatically_grants_one_rookie(self) -> None:
+        for goal, difficulty, starting_inventory in product(
             ("platinum_cup", "carsanity", "tracksanity", "tracksanity_plus"),
+            ("casual", "standard", "expert"),
             ({}, {"Car: RC Bandit": 0}, {"Track: Toys in the Hood 1": 1}, {"Car: BigVolt": 1}),
         ):
-            with self.subTest(goal=goal, start_inventory=starting_inventory):
-                with self.assertRaisesRegex(OptionError, "at least one starting car.*starting_cars"):
-                    setup_multiworld(RVGLWorld, seed=0, options={
-                        "goal": goal, "starting_cars": 0, "start_inventory": starting_inventory,
-                    })
-        with self.assertRaisesRegex(OptionError, r"RVGL player 2 \(Tester2\).*at least one starting car"):
-            setup_multiworld([RVGLWorld, RVGLWorld], seed=0, options=[{}, {"starting_cars": 0}])
+            with self.subTest(goal=goal, difficulty=difficulty, start_inventory=starting_inventory):
+                multiworld = setup_multiworld(RVGLWorld, seed=0, options={
+                    "goal": goal, "logic_difficulty": difficulty,
+                    "starting_cars": 0, "start_inventory": starting_inventory,
+                })
+                world = multiworld.worlds[1]
+                self.assertEqual(world.options.starting_cars.value, 1)
+                starting_cars = [item for item in multiworld.precollected_items[1] if item.name.startswith("Car: ")]
+                self.assertEqual(len(starting_cars), 1)
+                self.assertIn(starting_cars[0].name, {get_car_item_name(car) for car in STOCK_CARS if car.rating == 0})
+                self.assertNotIn(starting_cars[0].name, {item.name for item in multiworld.itempool})
+                self.assertEqual(len(multiworld.itempool), len(multiworld.get_unfilled_locations(1)))
+                distribute_items_restrictive(multiworld)
+                self.assertFalse(multiworld.get_unfilled_locations())
+                self.assertTrue(multiworld.can_beat_game())
+                self.assertTrue(multiworld.fulfills_accessibility())
 
     def test_zero_random_starting_cars_accepts_enabled_start_inventory_cars(self) -> None:
         for goal, (car_name, dreamcast) in product(
@@ -366,6 +381,7 @@ class TestStartingCars(unittest.TestCase):
                     [car_name],
                 )
                 self.assertNotIn(car_name, [item.name for item in multiworld.itempool])
+                self.assertEqual(world.options.starting_cars.value, 0)
                 self.assertEqual(len(multiworld.itempool), len(multiworld.get_unfilled_locations(1)))
                 distribute_items_restrictive(multiworld)
                 self.assertFalse(multiworld.get_unfilled_locations())
@@ -394,7 +410,7 @@ class TestStartingCars(unittest.TestCase):
 
 
 class TestStartingTracks(unittest.TestCase):
-    def test_zero_starting_tracks_raises_option_error(self) -> None:
+    def test_zero_starting_tracks_automatically_grants_one_easy_track(self) -> None:
         for goal, difficulty, starting_inventory in product(
             ("platinum_cup", "carsanity", "tracksanity", "tracksanity_plus"),
             ("casual", "standard", "expert"),
@@ -402,14 +418,23 @@ class TestStartingTracks(unittest.TestCase):
              {"Bronze Cup": 1}, {"Track: Rooftops": 1}),
         ):
             with self.subTest(goal=goal, difficulty=difficulty, start_inventory=starting_inventory):
-                with self.assertRaisesRegex(OptionError, "at least one starting track.*starting_tracks.*start_inventory"):
-                    setup_multiworld(RVGLWorld, seed=0, options={
-                        "goal": goal, "logic_difficulty": difficulty,
-                        "starting_tracks": 0, "start_inventory": starting_inventory,
-                        "include_stunt_arena_stars": True,
-                    })
-        with self.assertRaisesRegex(OptionError, r"RVGL player 2 \(Tester2\).*at least one starting track"):
-            setup_multiworld([RVGLWorld, RVGLWorld], seed=0, options=[{}, {"starting_tracks": 0}])
+                multiworld = setup_multiworld(RVGLWorld, seed=0, options={
+                    "goal": goal, "logic_difficulty": difficulty,
+                    "starting_tracks": 0, "start_inventory": starting_inventory,
+                    "include_stunt_arena_stars": True,
+                })
+                world = multiworld.worlds[1]
+                self.assertEqual(world.options.starting_tracks.value, 1)
+                starting_tracks = [item for item in multiworld.precollected_items[1] if item.name.startswith("Track: ")]
+                self.assertEqual(len(starting_tracks), 1)
+                self.assertIn(starting_tracks[0].name,
+                              {get_track_item_name(track) for track in STOCK_TRACKS if track.difficulty == 1})
+                self.assertNotIn(starting_tracks[0].name, {item.name for item in multiworld.itempool})
+                self.assertEqual(len(multiworld.itempool), len(multiworld.get_unfilled_locations(1)))
+                distribute_items_restrictive(multiworld)
+                self.assertFalse(multiworld.get_unfilled_locations())
+                self.assertTrue(multiworld.can_beat_game())
+                self.assertTrue(multiworld.fulfills_accessibility())
 
     def test_explicit_starting_tracks_are_applied_before_item_creation(self) -> None:
         for goal, difficulty, (track_name, dreamcast) in product(
@@ -463,6 +488,60 @@ class TestStartingTracks(unittest.TestCase):
                 self.assertEqual(len(multiworld.itempool), len(multiworld.get_unfilled_locations(1)))
                 for item_name in easy_names - starting_tracks:
                     self.assertEqual(pool_counts[item_name], 1)
+
+
+class TestStartingContent(unittest.TestCase):
+    def test_missing_starters_match_explicit_minimums_without_extra_random_choices(self) -> None:
+        for goal, difficulty, dreamcast, seed in product(
+            ("platinum_cup", "carsanity", "tracksanity", "tracksanity_plus"),
+            ("casual", "standard", "expert"), (False, True), range(3),
+        ):
+            with self.subTest(goal=goal, difficulty=difficulty, dreamcast=dreamcast, seed=seed):
+                options = {
+                    "goal": goal, "logic_difficulty": difficulty, "include_dreamcast_cars": dreamcast,
+                    "include_dreamcast_track_rooftops": dreamcast,
+                }
+                repaired = setup_multiworld(RVGLWorld, steps=("generate_early",), seed=seed, options={
+                    **options, "starting_cars": 0, "starting_tracks": 0,
+                })
+                explicit = setup_multiworld(RVGLWorld, steps=("generate_early",), seed=seed, options={
+                    **options, "starting_cars": 1, "starting_tracks": 1,
+                })
+                self.assertEqual(repaired.worlds[1].options, explicit.worlds[1].options)
+                self.assertEqual([item.name for item in repaired.precollected_items[1]],
+                                 [item.name for item in explicit.precollected_items[1]])
+                self.assertEqual(repaired.worlds[1].random.getstate(), explicit.worlds[1].random.getstate())
+
+    def test_repairs_are_scoped_to_each_player_and_balance_the_item_pool(self) -> None:
+        multiworld = setup_multiworld([RVGLWorld] * 3, steps=(), seed=0, options=[
+            {"starting_cars": 0, "starting_tracks": 0},
+            {"starting_cars": 0, "starting_tracks": 0,
+             "start_inventory": {"Car: Toyeca": 1, "Track: Ghost Town 2": 1}},
+            {},
+        ])
+        call_all(multiworld, "generate_early")
+        self.assertEqual([(world.options.starting_cars.value, world.options.starting_tracks.value)
+                          for world in multiworld.worlds.values()], [(1, 1), (0, 0), (3, 1)])
+        # Match Main.py: apply explicit starting inventory before creating regions and items.
+        for world in multiworld.worlds.values():
+            for item_name, count in world.options.start_inventory.value.items():
+                for _ in range(count):
+                    world.push_precollected(world.create_item(item_name))
+        for step in ("create_regions", "create_items", "set_rules"):
+            call_all(multiworld, step)
+        for player in multiworld.player_ids:
+            starting_names = {item.name for item in multiworld.precollected_items[player]}
+            pool = [item for item in multiworld.itempool if item.player == player]
+            self.assertTrue(any(name.startswith("Car: ") for name in starting_names))
+            self.assertTrue(any(name.startswith("Track: ") for name in starting_names))
+            self.assertFalse(starting_names.intersection(item.name for item in pool))
+            self.assertEqual(len(pool), len(multiworld.get_unfilled_locations(player)))
+        distribute_items_restrictive(multiworld)
+        call_all(multiworld, "post_fill")
+        call_all(multiworld, "finalize_multiworld")
+        self.assertFalse(multiworld.get_unfilled_locations())
+        self.assertTrue(multiworld.can_beat_game())
+        self.assertTrue(multiworld.fulfills_accessibility())
 
 
 class TestItemPoolOptions(unittest.TestCase):
@@ -571,6 +650,28 @@ class TestStuntArena(unittest.TestCase):
 
 
 class TestLocationPoolOptions(unittest.TestCase):
+    def test_remaining_unlock_counts_use_each_players_applied_starting_inventory(self) -> None:
+        multiworld = setup_multiworld([RVGLWorld, RVGLWorld], steps=("generate_early",), seed=0, options=[
+            {"start_inventory": {"Car: Toyeca": 2, "Track: Ghost Town 2": 1, "Car: BigVolt": 1}},
+            {"include_dreamcast_cars": True, "include_dreamcast_track_rooftops": True,
+             "start_inventory": {"Car: Toyeca": 2, "Track: Ghost Town 2": 1}},
+        ])
+        for player, world in multiworld.worlds.items():
+            with self.subTest(player=player):
+                self.assertEqual(len(world.get_remaining_item_data()), 40 if player == 1 else 55)
+                # Match Main.py: apply start_inventory after generate_early and before creating regions.
+                for item_name, count in world.options.start_inventory.value.items():
+                    for _ in range(count):
+                        world.push_precollected(world.create_item(item_name))
+                random_state = world.random.getstate()
+                remaining = world.get_remaining_item_data()
+                self.assertEqual(len(remaining), 38 if player == 1 else 53)
+                self.assertTrue(all(item.classification != ItemClassification.filler for item in remaining))
+                self.assertFalse({"Car: Toyeca", "Track: Ghost Town 2"}.intersection(item.name for item in remaining))
+                self.assertEqual(world.random.getstate(), random_state)
+        self.assertFalse(multiworld.get_regions())
+        self.assertFalse(multiworld.itempool)
+
     def test_location_option_combinations_preserve_catalogue_and_balance(self) -> None:
         location_options = {
             "include_single_race_wins": "single_race_win:",
@@ -584,13 +685,17 @@ class TestLocationPoolOptions(unittest.TestCase):
         catalogue = dict(RVGLWorld.location_name_to_id)
         data_package = RVGLWorld.get_data_package_data()
         item_options = ("include_dreamcast_cars", "include_dreamcast_track_rooftops")
-        for enabled in product((False, True), repeat=len(location_options) + len(item_options)):
+        for goal, enabled in product(
+            ("platinum_cup", "carsanity", "tracksanity", "tracksanity_plus"),
+            product((False, True), repeat=len(location_options) + len(item_options)),
+        ):
             options = dict(zip((*location_options, *item_options), enabled))
+            options["goal"] = Goal.options[goal]
             # Carsanity is a Choice accepting 0/1 rather than Toggle's boolean values.
             options["carsanity"] = int(options["carsanity"])
             with self.subTest(options=options):
                 multiworld = setup_multiworld(
-                    RVGLWorld, steps=("generate_early", "create_regions"), seed=0, options=options,
+                    RVGLWorld, steps=("generate_early",), seed=0, options=options,
                 )
                 world = multiworld.worlds[1]
                 expected_ids = {
@@ -601,40 +706,56 @@ class TestLocationPoolOptions(unittest.TestCase):
                          or any(options[key] and location.event_key.startswith(prefix)
                                 for key, prefix in location_options.items()))
                 }
+                random_state = world.random.getstate()
+                enabled_location_data = world.get_enabled_location_data()
+                expected_ids.update(location.id for location in world.get_goal_location_data())
+                self.assertEqual({location.id for location in enabled_location_data}, expected_ids)
+                self.assertEqual(len(enabled_location_data), len(expected_ids))
+                self.assertEqual(world.random.getstate(), random_state)
+                self.assertFalse(world.get_regions())
+                self.assertFalse(multiworld.itempool)
+                starting_names = {item.name for item in multiworld.precollected_items[1]}
+                world.create_regions()
+                actual_options = {key: getattr(world.options, key).value for key in options}
+                final_ids = {
+                    location.id for location in LOCATION_DATA
+                    if (options["include_dreamcast_track_rooftops"] or location.source not in DC_TRACKS)
+                    and (options["include_dreamcast_cars"] or location.source not in DC_CARS)
+                    and (location.event_key.startswith("championship_win:")
+                         or any(actual_options[key] and location.event_key.startswith(prefix)
+                                for key, prefix in location_options.items()))
+                } | {location.id for location in world.get_goal_location_data()}
                 self.assertEqual(
                     {location.address for location in world.get_locations() if location.address is not None},
-                    expected_ids,
+                    final_ids,
                 )
-                starting_names = {item.name for item in multiworld.precollected_items[1]}
                 unlock_names = {
                     item.name for item in ITEM_DATA
                     if item.source is not None
                     and (options["include_dreamcast_cars"] or item.source not in DC_CARS)
                     and (options["include_dreamcast_track_rooftops"] or item.source not in DC_TRACKS)
                 } - starting_names
-                if len(unlock_names) > len(expected_ids):
-                    with self.assertRaisesRegex(
-                        OptionError,
-                        f"{len(unlock_names)} unlock items.*only {len(expected_ids)} enabled locations.*"
-                        "Enable more Location Pool Options",
-                    ):
-                        world.create_items()
-                    self.assertFalse(multiworld.itempool)
-                else:
-                    world.create_items()
-                    world.set_rules()
-                    self.assertEqual(len(multiworld.itempool), len(expected_ids))
-                    self.assertEqual(
-                        Counter(item.name for item in multiworld.itempool if item.classification != ItemClassification.filler),
-                        Counter(unlock_names),
-                    )
-                    distribute_items_restrictive(multiworld)
-                    call_all(multiworld, "post_fill")
-                    call_all(multiworld, "finalize_multiworld")
-                    self.assertFalse(multiworld.get_unfilled_locations())
-                    self.assertTrue(multiworld.can_beat_game())
-                    self.assertTrue(multiworld.fulfills_accessibility())
-                self.assertEqual({key: getattr(world.options, key).value for key in options}, options)
+                self.assertEqual({item.name for item in world.get_remaining_item_data()}, unlock_names)
+                self.assertGreaterEqual(len(final_ids), len(unlock_names))
+                if len(unlock_names) <= len(expected_ids):
+                    self.assertEqual(actual_options, options)
+                    self.assertEqual(world.random.getstate(), random_state)
+                for key in options:
+                    if key not in location_options or options[key]:
+                        self.assertEqual(actual_options[key], options[key])
+                world.create_items()
+                world.set_rules()
+                self.assertEqual(len(multiworld.itempool), len(final_ids))
+                self.assertEqual(
+                    Counter(item.name for item in multiworld.itempool if item.classification != ItemClassification.filler),
+                    Counter(unlock_names),
+                )
+                distribute_items_restrictive(multiworld)
+                call_all(multiworld, "post_fill")
+                call_all(multiworld, "finalize_multiworld")
+                self.assertFalse(multiworld.get_unfilled_locations())
+                self.assertTrue(multiworld.can_beat_game())
+                self.assertTrue(multiworld.fulfills_accessibility())
                 self.assertEqual({item.name for item in multiworld.precollected_items[1]}, starting_names)
                 self.assertEqual(RVGLWorld.location_name_to_id, catalogue)
                 self.assertEqual(RVGLWorld.get_data_package_data(), data_package)
@@ -656,6 +777,90 @@ class TestLocationPoolOptions(unittest.TestCase):
         self.assertFalse(multiworld.get_unfilled_locations())
         self.assertTrue(multiworld.can_beat_game())
         self.assertTrue(multiworld.fulfills_accessibility())
+
+
+class TestLocationCapacity(unittest.TestCase):
+    disabled_options = {
+        "include_single_race_wins": False, "include_practice_stars": False,
+        "include_normal_time_trials": False, "include_reverse_time_trials": False,
+        "include_mirror_time_trials": False, "include_stunt_arena_stars": False, "carsanity": "disabled",
+    }
+    primary_options = {"include_single_race_wins", "include_practice_stars", "include_normal_time_trials"}
+    secondary_options = {"include_reverse_time_trials", "include_mirror_time_trials", "include_stunt_arena_stars", "carsanity"}
+
+    def test_repair_respects_priorities_goal_overrides_and_stops_when_items_fit(self) -> None:
+        for goal in ("platinum_cup", "carsanity", "tracksanity", "tracksanity_plus"):
+            with self.subTest(goal=goal):
+                world = setup_multiworld(RVGLWorld, steps=("generate_early",), seed=0, options={
+                    **self.disabled_options, "goal": goal, "include_dreamcast_cars": True,
+                    "include_dreamcast_track_rooftops": True,
+                }).worlds[1]
+                selected = []
+                choose = world.random.choice
+
+                def check_candidates(candidates):
+                    self.assertFalse(world.get_regions())
+                    self.assertLess(len(world.get_enabled_location_data()), len(world.get_remaining_item_data()))
+                    primary_enabled = (world.is_single_race_wins_enabled() and world.is_practice_stars_enabled()
+                                       and world.is_normal_time_trials_enabled())
+                    self.assertTrue(set(candidates).issubset(
+                        self.secondary_options if primary_enabled else self.primary_options,
+                    ))
+                    option_name = choose(candidates)
+                    selected.append(option_name)
+                    return option_name
+
+                with patch.object(world.random, "choice", side_effect=check_candidates), self.assertLogs(level="WARNING") as logs:
+                    world.create_regions()
+                self.assertGreaterEqual(len(world.get_enabled_location_data()), len(world.get_remaining_item_data()))
+                self.assertEqual(len(logs.output), 1)
+                self.assertIn("RVGL player 1 (Tester1)", logs.output[0])
+                self.assertIn("more locations needed", logs.output[0])
+                for option_name in selected:
+                    self.assertEqual(getattr(world.options, option_name).value, 1)
+                    self.assertIn(option_name, logs.output[0])
+                if goal in ("tracksanity", "tracksanity_plus"):
+                    self.assertFalse(world.options.include_single_race_wins)
+                if goal == "tracksanity_plus":
+                    self.assertFalse(world.options.include_practice_stars)
+                    self.assertFalse(world.options.include_normal_time_trials)
+                if goal == "carsanity":
+                    self.assertEqual(world.options.carsanity.current_key, "disabled")
+
+    def test_repair_is_reproducible_and_varies_between_seeds(self) -> None:
+        results = []
+        for seed in range(10):
+            runs = []
+            for _ in range(2):
+                world = setup_multiworld(RVGLWorld, seed=seed, options={
+                    **self.disabled_options, "include_dreamcast_cars": True,
+                    "include_dreamcast_track_rooftops": True,
+                }).worlds[1]
+                runs.append((tuple(getattr(world.options, key).value for key in self.disabled_options),
+                             tuple(item.name for item in world.multiworld.itempool), world.random.getstate()))
+            self.assertEqual(runs[0], runs[1])
+            results.append(runs[0][0])
+        self.assertGreater(len(set(results)), 1)
+
+    def test_applied_start_inventory_can_avoid_repair_without_affecting_another_player(self) -> None:
+        options = {**self.disabled_options, "carsanity": "enabled"}
+        multiworld = setup_multiworld([RVGLWorld, RVGLWorld], steps=("generate_early",), seed=0, options=[
+            {**options, "start_inventory": {get_track_item_name(track): 1 for track in STOCK_TRACKS}}, options,
+        ])
+        first, second = multiworld.worlds.values()
+        # Match Main.py: apply start_inventory before creating regions.
+        for item_name in first.options.start_inventory.value:
+            first.push_precollected(first.create_item(item_name))
+        random_state = first.random.getstate()
+        with self.assertNoLogs(level="WARNING"):
+            first.create_regions()
+        self.assertEqual(first.random.getstate(), random_state)
+        self.assertEqual({key: getattr(first.options, key).value for key in self.primary_options},
+                         {key: 0 for key in self.primary_options})
+        self.assertFalse(second.get_regions())
+        second.create_regions()
+        self.assertEqual(sum(bool(getattr(second.options, key)) for key in self.primary_options), 1)
+        self.assertEqual(sum(bool(getattr(first.options, key)) for key in self.primary_options), 0)
 
 
 class TestRegionAccess(unittest.TestCase):
@@ -856,12 +1061,16 @@ class TestCarsanity(unittest.TestCase):
             self.assertFalse(location.can_reach(multiworld.state))
             self.assertEqual(location.can_reach(state), get_car_item_name(car) in starting_names)
 
-    def test_carsanity_only_pool_reports_shortfall_and_supports_exact_capacity(self) -> None:
+    def test_carsanity_only_pool_expands_and_supports_exact_capacity(self) -> None:
         options = {"carsanity": "enabled", "include_single_race_wins": False, "include_practice_stars": False,
                    "include_normal_time_trials": False, "include_reverse_time_trials": False,
                    "include_mirror_time_trials": False}
-        with self.assertRaisesRegex(OptionError, "40 unlock items.*only 32 enabled locations.*8 more locations needed"):
-            setup_multiworld(RVGLWorld, seed=0, options=options)
+        multiworld = setup_multiworld(RVGLWorld, seed=0, options=options)
+        self.assertEqual(len(multiworld.itempool), 45)
+        distribute_items_restrictive(multiworld)
+        self.assertFalse(multiworld.get_unfilled_locations())
+        self.assertTrue(multiworld.can_beat_game())
+        self.assertTrue(multiworld.fulfills_accessibility())
         multiworld = setup_multiworld(RVGLWorld, seed=0, options={**options, "starting_cars": 8, "starting_tracks": 4})
         self.assertEqual(len(multiworld.itempool), 32)
         self.assertTrue(all(item.classification != ItemClassification.filler for item in multiworld.itempool))

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 from BaseClasses import CollectionState, Item, ItemClassification, Location, MultiWorld
 from Options import OptionError
 from worlds.AutoWorld import World
@@ -8,6 +10,7 @@ from . import car_chains, items, locations, output, regions, rules, web_world
 from .cars import DC_CARS, STOCK_CARS, CarData
 from .cups import STOCK_CUPS
 from .options import CarDistribution, Goal, LogicDifficulty, RVGLOptions
+from .stunt_arena import STOCK_STUNT_ARENA
 from .tracks import DC_TRACKS, STOCK_TRACKS, TrackData
 
 _ITEM_DATA_BY_NAME = {
@@ -47,20 +50,14 @@ class RVGLWorld(World):
             self.options.start_inventory.value.get(items.get_car_item_name(car), 0)
             for car in self.get_enabled_cars()
         )
-        if starting_car_count == 0 and self.options.logic_difficulty != LogicDifficulty.option_casual:
-            raise OptionError(
-                f"RVGL player {self.player} ({self.player_name}) must have at least one starting car. "
-                "Increase starting_cars or add an enabled car to start_inventory."
-            )
+        if starting_car_count == 0:
+            self.options.starting_cars.value = 1
         starting_track_count = self.options.starting_tracks.value + sum(
             self.options.start_inventory.value.get(items.get_track_item_name(track), 0)
             for track in self.get_enabled_tracks()
         )
         if starting_track_count == 0:
-            raise OptionError(
-                f"RVGL player {self.player} ({self.player_name}) must have at least one starting track. "
-                "Increase starting_tracks or add an enabled track to start_inventory."
-            )
+            self.options.starting_tracks.value = 1
         rookie_cars = tuple(car for car in self.get_enabled_cars() if car.rating == 0)
         starting_cars = []
         if self.options.logic_difficulty == LogicDifficulty.option_casual:
@@ -90,18 +87,58 @@ class RVGLWorld(World):
             self.push_precollected(self.create_item(item_name))
 
     def create_regions(self) -> None:
+        self._ensure_location_capacity()
         regions.create_regions(self)
+
+    def _ensure_location_capacity(self) -> None:
+        """Enable additional check categories, in priority order, until all unlocks fit."""
+        item_count = len(self.get_remaining_item_data())
+        location_count = len(self.get_enabled_location_data())
+        initial_location_count = location_count
+        enabled_options = []
+        priority_groups = (
+            {
+                "include_single_race_wins": self.is_single_race_wins_enabled(),
+                "include_practice_stars": self.is_practice_stars_enabled(),
+                "include_normal_time_trials": self.is_normal_time_trials_enabled(),
+            },
+            {
+                "include_reverse_time_trials": bool(self.options.include_reverse_time_trials),
+                "include_mirror_time_trials": bool(self.options.include_mirror_time_trials),
+                "include_stunt_arena_stars": bool(self.options.include_stunt_arena_stars),
+                "carsanity": self.is_carsanity_enabled(),
+            },
+        )
+        for priority_group in priority_groups:
+            disabled_options = [name for name, enabled in priority_group.items() if not enabled]
+            while location_count < item_count and disabled_options:
+                option_name = self.random.choice(disabled_options)
+                disabled_options.remove(option_name)
+                getattr(self.options, option_name).value = 1
+                enabled_options.append(option_name)
+                location_count = len(self.get_enabled_location_data())
+
+        if location_count < item_count:
+            raise OptionError(
+                f"RVGL player {self.player} ({self.player_name}) has {item_count} unlock items "
+                f"but only {location_count} locations after enabling all Location Pool Options."
+            )
+        if enabled_options:
+            logging.warning(
+                "RVGL player %s (%s) had %s unlock items but only %s enabled locations "
+                "(%s more locations needed). Automatically enabled %s; now has %s locations.",
+                self.player, self.player_name, item_count, initial_location_count,
+                item_count - initial_location_count, ", ".join(enabled_options), location_count,
+            )
 
     def set_rules(self) -> None:
         rules.set_rules(self)
 
     def create_items(self) -> None:
         """Create each remaining unlock once and fill the unused reward slots with filler."""
-        starting_item_names = {item.name for item in self.multiworld.precollected_items[self.player]}
         itempool = [
             self.create_item(item.name)
-            for item in self.get_enabled_item_data()
-            if item.classification != ItemClassification.filler and item.name not in starting_item_names
+            for item in self.get_remaining_item_data()
         ]
 
         location_count = len(self.multiworld.get_unfilled_locations(self.player))
@@ -158,6 +195,33 @@ class RVGLWorld(World):
                 or item.source in enabled_tracks
                 or item.source in STOCK_CUPS
                 or item.classification == ItemClassification.filler)
+        )
+
+    def get_remaining_item_data(self) -> tuple[items.ItemData, ...]:
+        """Return uncollected unlock definitions; use after starting inventory has been applied."""
+        starting_item_names = {item.name for item in self.multiworld.precollected_items[self.player]}
+        return tuple(
+            item for item in self.get_enabled_item_data()
+            if item.classification != ItemClassification.filler and item.name not in starting_item_names
+        )
+
+    def get_enabled_location_data(self) -> tuple[locations.LocationData, ...]:
+        """Return network check definitions in catalogue order without creating regions or events."""
+        enabled_sources = (*self.get_enabled_cars(), *self.get_enabled_tracks(), *STOCK_CUPS, STOCK_STUNT_ARENA)
+        enabled_location_types = {
+            "car_race_win": self.is_carsanity_enabled(),
+            "single_race_win": self.is_single_race_wins_enabled(),
+            "practice_star": self.is_practice_stars_enabled(),
+            "time_trial_normal": self.is_normal_time_trials_enabled(),
+            "time_trial_reverse": self.options.include_reverse_time_trials,
+            "time_trial_mirror": self.options.include_mirror_time_trials,
+            "championship_win": True,
+            "stunt_star": self.options.include_stunt_arena_stars,
+        }
+        # location.event_key.partition(":")[0] extracts the location type name before the colon.
+        return tuple(
+            location for location in locations.LOCATION_DATA
+            if location.source in enabled_sources and enabled_location_types[location.event_key.partition(":")[0]]
         )
 
     def get_enabled_cars(self) -> tuple[CarData, ...]:

@@ -26,13 +26,13 @@ class LogicDifficulty(Choice):
     The exact requirements for each difficulty depend on the check type, but in general:
 
     Casual: Requires a car of a superior rating to make the check in logic.
-        Example: Bronze Cup requires at least an Amateur car to be in logic.
+        Example: Silver Cup requires at least an Advanced car to be in logic.
 
     Standard: Requires a car of the same rating to make the check in logic.
         Example: Silver Cup requires at least an Amateur car to be in logic.
 
     Expert: Requires a car of a rating below to make the check in logic.
-        Example: Gold Cup requires at least an Amateur car to be in logic.
+        Example: Silver Cup requires at least a Rookie car to be in logic.
 
     Additional effects of logic difficulty:
     - Casual logic grants one of the following starting cars:
@@ -64,7 +64,7 @@ class StartingCars(Range):
     """Number of Rookie cars randomly granted at the start.
 
     To have specific starting cars, use the start_inventory option and set this to 0.
-    You must have at least one starting car across this option and the start_inventory.
+    If the start_inventory has no cars and this option is 0, the option will be automatically set to 1.
     If using Casual logic, at least one of the following cars will be granted (regardless of this option's value):
     RC Bandit, Col. Moss, Dr. Grudge, Sprinter XL, or BigVolt (if DC cars are enabled).
     """
@@ -79,6 +79,7 @@ class StartingTracks(Range):
 
     To have specific starting tracks, use the start_inventory option and set this to 0.
     You must have at least one starting track across this option and the start_inventory.
+    If the start_inventory has no tracks and this option is 0, the option will be automatically set to 1.
     """
     display_name = "Starting Tracks"
     range_start = 0
@@ -100,8 +101,8 @@ class IncludeSingleRaceWins(DefaultOnToggle):
     """Include Single Race wins on each track as location checks.
     If Tracksanity or Tracksanity Plus is chosen as the goal, this setting is forced to True.
 
-    Removing too many locations from the location pool can cause generation to fail
-    if the world has more required items than available locations.
+    If there are not enough locations in the pool, location options will be enabled randomly
+    until you have enough available locations.
     """
     display_name = "Include Single Race Wins"
 

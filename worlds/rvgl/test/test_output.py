@@ -1,6 +1,7 @@
 import json
 import tempfile
 import unittest
+import zipfile
 from copy import deepcopy
 from itertools import product
 from pathlib import Path
@@ -9,6 +10,7 @@ from unittest.mock import patch
 from Options import PlandoItem
 from test.general import setup_multiworld
 from Utils import Version
+from worlds.Files import container_version, is_ap_player_container
 
 from .. import RVGLWorld
 from ..cars import DC_CARS, STOCK_CARS, CarData
@@ -29,6 +31,47 @@ from ..tracks import DC_TRACKS, STOCK_TRACKS
 
 
 class TestOutput(unittest.TestCase):
+    def test_starting_content_repairs_are_exported_per_player(self) -> None:
+        multiworld = setup_multiworld([RVGLWorld] * 3, steps=("generate_early",), seed=0, options=[
+            {"starting_cars": 0, "starting_tracks": 0},
+            {"starting_cars": 0, "starting_tracks": 0,
+             "start_inventory": {"Car: Toyeca": 1, "Track: Ghost Town 2": 1}},
+            {},
+        ])
+        for world, expected in zip(multiworld.worlds.values(), ((1, 1), (0, 0), (3, 1))):
+            with self.subTest(player=world.player):
+                # Match Main.py's timing for explicit starting inventory.
+                for item_name, count in world.options.start_inventory.value.items():
+                    for _ in range(count):
+                        world.push_precollected(world.create_item(item_name))
+                world.create_regions()
+                exported = build_randomizer_config(world)["archipelago"]["yamlOptions"]
+                self.assertEqual((exported["starting_cars"], exported["starting_tracks"]), expected)
+                self.assertEqual(exported["start_inventory"], world.options.start_inventory.value)
+
+    def test_capacity_repairs_are_exported_with_the_created_location_mappings(self) -> None:
+        location_options = (
+            "include_single_race_wins", "include_practice_stars", "include_normal_time_trials",
+            "include_reverse_time_trials", "include_mirror_time_trials", "include_stunt_arena_stars",
+        )
+        for seed in range(8):
+            with self.subTest(seed=seed):
+                multiworld = setup_multiworld(RVGLWorld, seed=seed, options={
+                    **dict.fromkeys(location_options, False), "carsanity": "disabled",
+                    "include_dreamcast_cars": True, "include_dreamcast_track_rooftops": True,
+                })
+                world = multiworld.worlds[1]
+                archipelago = build_randomizer_config(world)["archipelago"]
+                for name in location_options:
+                    self.assertIs(archipelago["yamlOptions"][name], bool(getattr(world.options, name)))
+                self.assertEqual(archipelago["yamlOptions"]["carsanity"], world.options.carsanity.current_key)
+                self.assertIs(archipelago["carsanity"], world.is_carsanity_enabled())
+                self.assertEqual(archipelago["locations"], {
+                    location.event_key: location.id for location in LOCATION_DATA
+                    if location.name in {check.name for check in world.get_locations() if check.address is not None}
+                })
+                self.assertGreaterEqual(len(archipelago["locations"]), len(world.get_remaining_item_data()))
+
     @patch("worlds.rvgl.output.time_ns", return_value=1_792_833_654_681_395_400)
     def test_yaml_options_include_resolved_game_and_common_settings(self, mock_time_ns) -> None:
         multiworld = setup_multiworld([RVGLWorld, RVGLWorld], seed=0, options=[
@@ -390,8 +433,23 @@ class TestOutput(unittest.TestCase):
             for player, world in multiworld.worlds.items():
                 random_state = world.random.getstate()
                 world.generate_output(directory)
-                path = Path(directory) / (multiworld.get_out_file_name_base(player) + ".rvgl.json")
-                contents = path.read_bytes()
+                path = Path(directory) / (multiworld.get_out_file_name_base(player) + ".aprvgl")
+                filename = multiworld.get_out_file_name_base(player) + ".rvgl.json"
+                self.assertTrue(is_ap_player_container(world.game, path.read_bytes(), player))
+                self.assertFalse(is_ap_player_container(world.game, path.read_bytes(), player + 1))
+                with zipfile.ZipFile(path) as output_file:
+                    self.assertEqual(set(output_file.namelist()), {"archipelago.json", filename})
+                    manifest = output_file.read("archipelago.json")
+                    self.assertEqual(json.loads(manifest), {
+                        "compatible_version": 5,
+                        "version": container_version,
+                        "server": "",
+                        "player": player,
+                        "player_name": world.player_name,
+                        "game": "RVGL",
+                        "patch_file_ending": ".aprvgl",
+                    })
+                    contents = output_file.read(filename)
                 config = json.loads(contents)
                 self.assertEqual(config["metadata"]["generatedAt"], "2026-10-24T09:20:54.681395400+00:00")
                 self.assertEqual(config, build_randomizer_config(world))
@@ -400,7 +458,10 @@ class TestOutput(unittest.TestCase):
                 self.assertEqual(config["cups"][1]["obtainCondition"], 13)
                 profiles.add(config["metadata"]["profileName"])
                 world.generate_output(directory)
-                self.assertEqual(path.read_bytes(), contents)
+                with zipfile.ZipFile(path) as output_file:
+                    self.assertEqual(output_file.read(filename), contents)
+                    self.assertEqual(output_file.read("archipelago.json"), manifest)
                 self.assertEqual(world.random.getstate(), random_state)
-            self.assertEqual(len(list(Path(directory).glob("*.rvgl.json"))), len(multiworld.player_ids))
+            self.assertEqual(len(list(Path(directory).glob("*.aprvgl"))), len(multiworld.player_ids))
+            self.assertFalse(list(Path(directory).glob("*.rvgl.json")))
         self.assertEqual(len(profiles), len(multiworld.player_ids))
